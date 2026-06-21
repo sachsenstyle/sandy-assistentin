@@ -386,9 +386,22 @@
           <button onclick="summarizeChat()" title="Gespräch zusammenfassen & dauerhaft merken" style="display:flex; align-items:center; gap:6px; padding:7px 14px; border-radius:var(--radius-pill); border:1px solid var(--purple-200); background:var(--purple-50); color:var(--purple-500); font-size:13px; cursor:pointer; font-weight:500; transition:all 0.15s;">
             🧠 Jetzt merken
           </button>
+          <!-- Bild Upload Button -->
+          <button onclick="document.getElementById('img-upload').click()" title="Bild oder Screenshot hochladen" style="display:flex; align-items:center; gap:6px; padding:7px 14px; border-radius:var(--radius-pill); border:1px solid var(--border); background:var(--surface); color:var(--text-muted); font-size:13px; cursor:pointer; transition:all 0.15s;">
+            🖼️ Bild
+          </button>
+          <input type="file" id="img-upload" accept="image/*" style="display:none;" onchange="handleImageUpload(event)" />
           <div id="mic-status" style="font-size:12px; color:var(--teal-400); display:none;">● Aufnahme läuft...</div>
           <div id="voice-status" style="font-size:12px; color:var(--purple-500); display:none;">▶ Sandy spricht...</div>
         </div>
+
+        <!-- Bild Vorschau -->
+        <div id="img-preview-box" style="display:none; margin-bottom:8px; position:relative; width:fit-content;">
+          <img id="img-preview" src="" style="max-height:120px; max-width:100%; border-radius:var(--radius-sm); border:1px solid var(--border);" />
+          <button onclick="removeImage()" style="position:absolute; top:-6px; right:-6px; width:20px; height:20px; border-radius:50%; background:#E24B4A; color:white; border:none; cursor:pointer; font-size:11px; display:flex; align-items:center; justify-content:center;">✕</button>
+          <div style="font-size:11px; color:var(--teal-400); margin-top:3px;">✓ Bild bereit — Sandy analysiert es mit deiner Nachricht</div>
+        </div>
+
         <!-- Summary display -->
         <div id="memory-box" style="display:none; background:var(--purple-50); border:1px solid var(--purple-200); border-radius:var(--radius-sm); padding:8px 12px; font-size:12px; color:var(--purple-900); margin-bottom:8px; line-height:1.5;">
           <strong>🧠 Sandy merkt sich:</strong> <span id="memory-text"></span>
@@ -401,12 +414,12 @@
           <button class="chip" onclick="quickSend('Wie teile ich meine Zeit diese Woche optimal auf?')">⏱️ Zeitplan</button>
         </div>
         <div class="chat-input-row" style="margin-top:8px;">
-          <textarea id="chat-input" placeholder="Schreib oder sprich mit Sandy..." rows="1"
+          <textarea id="chat-input" placeholder="Schreib oder sprich mit Sandy... oder lade ein Bild hoch 🖼️" rows="1"
             onkeydown="handleKey(event)" oninput="autoGrow(this)"></textarea>
           <button class="send-btn" onclick="sendMsg()">Senden →</button>
         </div>
         <div class="chat-meta">
-          <span class="chat-meta-hint">Enter = Senden · Shift+Enter = neue Zeile · 🎙️ = Sprechen</span>
+          <span class="chat-meta-hint">Enter = Senden · Shift+Enter = neue Zeile · 🖼️ = Bild hochladen</span>
           <button class="clear-btn" onclick="clearChat()">Chat löschen</button>
         </div>
       </div>
@@ -1002,7 +1015,7 @@ function removeTyping() {
   if (el) el.remove();
 }
 
-async function callSandy(userMsg) {
+async function callSandy(userMsg, imageBase64 = null, imageType = null) {
   const key = getApiKey();
   if (!key) { document.getElementById('api-banner').classList.remove('hidden'); return; }
 
@@ -1012,9 +1025,29 @@ async function callSandy(userMsg) {
   if (memory)    systemPrompt += `\n\nWAS SANDY SICH GEMERKT HAT (nie wieder nachfragen!):\n${memory}`;
   if (customCtx) systemPrompt += `\n\nZUSATZ-KONTEXT VON RAMONA:\n${customCtx}`;
 
-  chatHistory.push({ role: 'user', content: userMsg });
+  // Nachricht aufbauen — mit oder ohne Bild
+  let userContent;
+  if (imageBase64 && imageType) {
+    userContent = [
+      { type: 'image', source: { type: 'base64', media_type: imageType, data: imageBase64 } },
+      { type: 'text', text: userMsg || 'Was siehst du auf diesem Bild? Analysiere es für mein Business.' }
+    ];
+  } else {
+    userContent = userMsg;
+  }
+
+  chatHistory.push({ role: 'user', content: userMsg }); // Nur Text im Verlauf speichern
   saveChatHistory();
   showTyping();
+
+  // Messages für API aufbauen — Bilder nicht in History (zu groß)
+  const apiMessages = [
+    ...chatHistory.slice(-18).map(m => ({ role: m.role, content: m.content })),
+  ];
+  // Letzte User-Nachricht mit Bild ersetzen falls vorhanden
+  if (imageBase64 && imageType) {
+    apiMessages[apiMessages.length - 1] = { role: 'user', content: userContent };
+  }
 
   try {
     const res = await fetch('https://api.anthropic.com/v1/messages', {
@@ -1029,7 +1062,7 @@ async function callSandy(userMsg) {
         model: 'claude-sonnet-4-6',
         max_tokens: 2000,
         system: systemPrompt,
-        messages: chatHistory.slice(-20)
+        messages: apiMessages
       })
     });
 
@@ -1055,10 +1088,36 @@ async function callSandy(userMsg) {
 async function sendMsg() {
   const ta = document.getElementById('chat-input');
   const text = ta.value.trim();
-  if (!text) return;
+  const hasImage = currentImageBase64 !== null;
+
+  if (!text && !hasImage) return;
+
+  const msgText = text || '🖼️ Bild hochgeladen';
   ta.value = ''; ta.style.height = 'auto';
-  renderMsg('user', text);
-  await callSandy(text);
+
+  // Bild in Chat anzeigen
+  if (hasImage) {
+    const imgSrc = document.getElementById('img-preview').src;
+    const area = document.getElementById('chat-messages');
+    const div = document.createElement('div');
+    div.className = 'msg user';
+    const time = new Date().toLocaleTimeString('de-DE', {hour:'2-digit', minute:'2-digit'});
+    div.innerHTML = `<div class="msg-av user">R</div><div class="msg-content">
+      <img src="${imgSrc}" style="max-width:200px; max-height:150px; border-radius:8px; border:1px solid var(--border); margin-bottom:4px; display:block;" />
+      ${text ? `<div class="msg-bubble">${escapeHtml(text)}</div>` : ''}
+      <div class="msg-time">${time}</div>
+    </div>`;
+    area.appendChild(div);
+    area.scrollTop = area.scrollHeight;
+  } else {
+    renderMsg('user', text);
+  }
+
+  const imgBase64 = currentImageBase64;
+  const imgType   = currentImageType;
+  removeImage(); // Bild nach dem Senden entfernen
+
+  await callSandy(msgText, imgBase64, imgType);
 }
 
 async function quickSend(text) {
@@ -1429,6 +1488,36 @@ async function sandyWriteSpecific(prompt) {
 function loadElKey() {
   const k = localStorage.getItem('sandy_el_key');
   if (k) { const el = document.getElementById('el-api-key'); if(el) el.value = k; }
+}
+
+// ── BILD UPLOAD ──
+let currentImageBase64 = null;
+let currentImageType = null;
+
+function handleImageUpload(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  if (!file.type.startsWith('image/')) { alert('Bitte nur Bilder hochladen!'); return; }
+  if (file.size > 5 * 1024 * 1024) { alert('Bild zu groß! Bitte unter 5MB.'); return; }
+
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    const base64 = e.target.result.split(',')[1];
+    currentImageBase64 = base64;
+    currentImageType = file.type;
+    document.getElementById('img-preview').src = e.target.result;
+    document.getElementById('img-preview-box').style.display = 'block';
+  };
+  reader.readAsDataURL(file);
+  // Input zurücksetzen damit gleiche Datei nochmal gewählt werden kann
+  event.target.value = '';
+}
+
+function removeImage() {
+  currentImageBase64 = null;
+  currentImageType = null;
+  document.getElementById('img-preview-box').style.display = 'none';
+  document.getElementById('img-preview').src = '';
 }
 
 // ── MIKROFON (Web Speech API) ──
