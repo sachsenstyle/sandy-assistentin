@@ -375,19 +375,38 @@
         <!-- Messages inserted here -->
       </div>
       <div class="chat-input-area">
+        <!-- Voice & Memory Bar -->
+        <div style="display:flex; align-items:center; gap:8px; margin-bottom:8px; flex-wrap:wrap;">
+          <button id="mic-btn" onclick="toggleMic()" title="Mikrofon starten" style="display:flex; align-items:center; gap:6px; padding:7px 14px; border-radius:var(--radius-pill); border:1px solid var(--border); background:var(--surface); color:var(--text-muted); font-size:13px; cursor:pointer; transition:all 0.15s;">
+            🎙️ <span id="mic-label">Sprechen</span>
+          </button>
+          <button id="voice-btn" onclick="toggleVoice()" title="Sprachausgabe ein/aus" style="display:flex; align-items:center; gap:6px; padding:7px 14px; border-radius:var(--radius-pill); border:1px solid var(--border); background:var(--surface); color:var(--text-muted); font-size:13px; cursor:pointer; transition:all 0.15s;">
+            🔊 <span id="voice-label">Stimme: Aus</span>
+          </button>
+          <button onclick="summarizeChat()" title="Gespräch zusammenfassen & dauerhaft merken" style="display:flex; align-items:center; gap:6px; padding:7px 14px; border-radius:var(--radius-pill); border:1px solid var(--purple-200); background:var(--purple-50); color:var(--purple-500); font-size:13px; cursor:pointer; font-weight:500; transition:all 0.15s;">
+            🧠 Jetzt merken
+          </button>
+          <div id="mic-status" style="font-size:12px; color:var(--teal-400); display:none;">● Aufnahme läuft...</div>
+          <div id="voice-status" style="font-size:12px; color:var(--purple-500); display:none;">▶ Sandy spricht...</div>
+        </div>
+        <!-- Summary display -->
+        <div id="memory-box" style="display:none; background:var(--purple-50); border:1px solid var(--purple-200); border-radius:var(--radius-sm); padding:8px 12px; font-size:12px; color:var(--purple-900); margin-bottom:8px; line-height:1.5;">
+          <strong>🧠 Sandy merkt sich:</strong> <span id="memory-text"></span>
+          <button onclick="clearMemory()" style="float:right; border:none; background:none; color:var(--text-hint); cursor:pointer; font-size:11px;">✕ löschen</button>
+        </div>
         <div class="chat-chips">
-          <button class="chip" onclick="quickSend('Was sind meine dringendsten Aufgaben heute?')">🎯 Heutige Prioritäten</button>
+          <button class="chip" onclick="quickSend('Was sind meine dringendsten Aufgaben heute?')">🎯 Prioritäten</button>
           <button class="chip" onclick="quickSend('Erstelle eine E-Mail an einen Kooperationspartner')">📧 E-Mail</button>
-          <button class="chip" onclick="quickSend('Gib mir Ideen für meinen nächsten Affiliate-Post')">💡 Affiliate-Ideen</button>
-          <button class="chip" onclick="quickSend('Wie teile ich meine Zeit diese Woche optimal auf alle Projekte auf?')">⏱️ Zeitplanung</button>
+          <button class="chip" onclick="quickSend('Gib mir Ideen für meinen nächsten Affiliate-Post')">💡 Ideen</button>
+          <button class="chip" onclick="quickSend('Wie teile ich meine Zeit diese Woche optimal auf?')">⏱️ Zeitplan</button>
         </div>
         <div class="chat-input-row" style="margin-top:8px;">
-          <textarea id="chat-input" placeholder="Schreib Sandy eine Nachricht..." rows="1"
+          <textarea id="chat-input" placeholder="Schreib oder sprich mit Sandy..." rows="1"
             onkeydown="handleKey(event)" oninput="autoGrow(this)"></textarea>
           <button class="send-btn" onclick="sendMsg()">Senden →</button>
         </div>
         <div class="chat-meta">
-          <span class="chat-meta-hint">Enter = Senden · Shift+Enter = neue Zeile</span>
+          <span class="chat-meta-hint">Enter = Senden · Shift+Enter = neue Zeile · 🎙️ = Sprechen</span>
           <button class="clear-btn" onclick="clearChat()">Chat löschen</button>
         </div>
       </div>
@@ -871,6 +890,9 @@ function init() {
   loadNotes();
   loadContext();
   loadElKey();
+  loadMemory();
+  // Stimmen vorladen (Safari braucht das)
+  window.speechSynthesis.getVoices();
   if (chatHistory.length === 0) addWelcomeMessage();
 }
 
@@ -982,7 +1004,10 @@ async function callSandy(userMsg) {
   if (!key) { document.getElementById('api-banner').classList.remove('hidden'); return; }
 
   const customCtx = localStorage.getItem(STORAGE_KEYS.context) || '';
-  const systemPrompt = SANDY_SYSTEM + (customCtx ? `\n\nZUSATZ-KONTEXT VON RAMONA:\n${customCtx}` : '');
+  const memory    = localStorage.getItem('sandy_memory') || '';
+  let systemPrompt = SANDY_SYSTEM;
+  if (memory)    systemPrompt += `\n\nWAS SANDY SICH GEMERKT HAT (nie wieder nachfragen!):\n${memory}`;
+  if (customCtx) systemPrompt += `\n\nZUSATZ-KONTEXT VON RAMONA:\n${customCtx}`;
 
   chatHistory.push({ role: 'user', content: userMsg });
   saveChatHistory();
@@ -1017,6 +1042,7 @@ async function callSandy(userMsg) {
     chatHistory.push({ role: 'assistant', content: reply });
     saveChatHistory();
     renderMsg('sandy', reply);
+    if (voiceEnabled) speakText(reply);
   } catch(e) {
     removeTyping();
     renderMsg('sandy', '⚠️ Verbindungsfehler. Bitte prüfe deine Internetverbindung und den API-Schlüssel.');
@@ -1400,6 +1426,163 @@ async function sandyWriteSpecific(prompt) {
 function loadElKey() {
   const k = localStorage.getItem('sandy_el_key');
   if (k) { const el = document.getElementById('el-api-key'); if(el) el.value = k; }
+}
+
+// ── MIKROFON (Web Speech API) ──
+let recognition = null;
+let isListening = false;
+
+function toggleMic() {
+  if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+    alert('Dein Browser unterstützt kein Mikrofon. Bitte Chrome oder Safari verwenden.');
+    return;
+  }
+  isListening ? stopMic() : startMic();
+}
+
+function startMic() {
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  recognition = new SR();
+  recognition.lang = 'de-DE';
+  recognition.continuous = false;
+  recognition.interimResults = false;
+
+  recognition.onstart = () => {
+    isListening = true;
+    document.getElementById('mic-btn').style.background = '#FCEBEB';
+    document.getElementById('mic-btn').style.borderColor = '#E24B4A';
+    document.getElementById('mic-btn').style.color = '#E24B4A';
+    document.getElementById('mic-label').textContent = 'Aufnahme stoppen';
+    document.getElementById('mic-status').style.display = 'inline';
+  };
+
+  recognition.onresult = async (e) => {
+    const transcript = e.results[0][0].transcript.trim();
+    if (transcript) {
+      document.getElementById('chat-input').value = transcript;
+      stopMic();
+      // Automatisch absenden
+      renderMsg('user', transcript);
+      document.getElementById('chat-input').value = '';
+      await callSandy(transcript);
+    }
+  };
+
+  recognition.onerror = () => stopMic();
+  recognition.onend   = () => stopMic();
+  recognition.start();
+}
+
+function stopMic() {
+  isListening = false;
+  if (recognition) { try { recognition.stop(); } catch(e){} recognition = null; }
+  const btn = document.getElementById('mic-btn');
+  btn.style.background = '';
+  btn.style.borderColor = '';
+  btn.style.color = '';
+  document.getElementById('mic-label').textContent = 'Sprechen';
+  document.getElementById('mic-status').style.display = 'none';
+}
+
+// ── SPRACHAUSGABE (Web Speech Synthesis) ──
+let voiceEnabled = false;
+let currentUtterance = null;
+
+function toggleVoice() {
+  voiceEnabled = !voiceEnabled;
+  const btn   = document.getElementById('voice-btn');
+  const label = document.getElementById('voice-label');
+  if (voiceEnabled) {
+    btn.style.background = '#E1F5EE';
+    btn.style.borderColor = '#9FE1CB';
+    btn.style.color = '#0F6E56';
+    label.textContent = 'Stimme: An';
+    showToast('Sandy spricht jetzt mit dir 🔊');
+  } else {
+    btn.style.background = '';
+    btn.style.borderColor = '';
+    btn.style.color = '';
+    label.textContent = 'Stimme: Aus';
+    if (currentUtterance) { window.speechSynthesis.cancel(); }
+  }
+}
+
+function speakText(text) {
+  if (!voiceEnabled) return;
+  window.speechSynthesis.cancel();
+  // Kürze langen Text für Sprachausgabe auf max 400 Zeichen
+  const speakable = text.replace(/[#*_`]/g, '').substring(0, 400);
+  const utt = new SpeechSynthesisUtterance(speakable);
+  utt.lang = 'de-DE';
+  utt.rate = 1.05;
+  utt.pitch = 1.1;
+  // Beste verfügbare deutsche Stimme wählen
+  const voices = window.speechSynthesis.getVoices();
+  const deVoice = voices.find(v => v.lang.startsWith('de') && v.localService) ||
+                  voices.find(v => v.lang.startsWith('de')) || null;
+  if (deVoice) utt.voice = deVoice;
+  utt.onstart = () => document.getElementById('voice-status').style.display = 'inline';
+  utt.onend   = () => document.getElementById('voice-status').style.display = 'none';
+  utt.onerror = () => document.getElementById('voice-status').style.display = 'none';
+  currentUtterance = utt;
+  window.speechSynthesis.speak(utt);
+}
+
+// ── GEDÄCHTNIS / ZUSAMMENFASSUNG ──
+async function summarizeChat() {
+  const key = getApiKey();
+  if (!key) { document.getElementById('api-banner').classList.remove('hidden'); return; }
+  if (chatHistory.length < 2) { showToast('Noch zu wenig Gesprächsinhalt zum Merken.'); return; }
+
+  showToast('🧠 Sandy fasst zusammen...');
+
+  const summaryPrompt = `Fasse dieses Gespräch in maximal 5 kurzen Stichpunkten zusammen. 
+Fokus: Was wurde entschieden? Welche Aufgaben wurden vereinbart? Welche wichtigen Infos wurden genannt?
+Schreibe NUR die Stichpunkte, keine Einleitung. Format: "- ..."`;
+
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type':'application/json', 'x-api-key':key, 'anthropic-version':'2023-06-01', 'anthropic-dangerous-direct-browser-access':'true' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-6',
+        max_tokens: 400,
+        system: 'Du bist Sandy. Fasse Gespräche präzise zusammen.',
+        messages: [...chatHistory.slice(-20), { role:'user', content: summaryPrompt }]
+      })
+    });
+    const data = await res.json();
+    const summary = data.content?.[0]?.text || '';
+    if (!summary) { showToast('Zusammenfassung fehlgeschlagen.'); return; }
+
+    // Bestehende Memory erweitern
+    const existing = localStorage.getItem('sandy_memory') || '';
+    const date = new Date().toLocaleDateString('de-DE', {day:'numeric', month:'short', hour:'2-digit', minute:'2-digit'});
+    const newMemory = (existing ? existing + '\n\n' : '') + `[${date}]:\n${summary}`;
+    localStorage.setItem('sandy_memory', newMemory);
+
+    // Anzeigen
+    document.getElementById('memory-text').textContent = summary.substring(0, 120) + (summary.length > 120 ? '...' : '');
+    document.getElementById('memory-box').style.display = 'block';
+    showToast('🧠 Sandy hat es sich gemerkt ✓');
+  } catch(e) {
+    showToast('Fehler beim Zusammenfassen.');
+  }
+}
+
+function clearMemory() {
+  if (!confirm('Gespeichertes Gedächtnis löschen?')) return;
+  localStorage.removeItem('sandy_memory');
+  document.getElementById('memory-box').style.display = 'none';
+  showToast('Gedächtnis gelöscht');
+}
+
+function loadMemory() {
+  const m = localStorage.getItem('sandy_memory');
+  if (m) {
+    document.getElementById('memory-text').textContent = m.substring(0, 120) + (m.length > 120 ? '...' : '');
+    document.getElementById('memory-box').style.display = 'block';
+  }
 }
 
 // ── TOAST ──
