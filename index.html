@@ -891,7 +891,10 @@ function init() {
   loadContext();
   loadElKey();
   loadMemory();
-  // Stimmen vorladen (Safari braucht das)
+  // Stimmen vorladen (Chrome braucht onvoiceschanged)
+  if (window.speechSynthesis.onvoiceschanged !== undefined) {
+    window.speechSynthesis.onvoiceschanged = () => window.speechSynthesis.getVoices();
+  }
   window.speechSynthesis.getVoices();
   if (chatHistory.length === 0) addWelcomeMessage();
 }
@@ -1497,35 +1500,60 @@ function toggleVoice() {
     btn.style.borderColor = '#9FE1CB';
     btn.style.color = '#0F6E56';
     label.textContent = 'Stimme: An';
-    showToast('Sandy spricht jetzt mit dir 🔊');
+    // Sofort Teston abspielen damit Chrome entsperrt
+    testVoice();
   } else {
     btn.style.background = '';
     btn.style.borderColor = '';
     btn.style.color = '';
     label.textContent = 'Stimme: Aus';
-    if (currentUtterance) { window.speechSynthesis.cancel(); }
+    window.speechSynthesis.cancel();
   }
+}
+
+function testVoice() {
+  window.speechSynthesis.cancel();
+  const utt = new SpeechSynthesisUtterance('Hallo Ramona, ich bin bereit!');
+  utt.lang = 'de-DE';
+  utt.rate = 1.05;
+  utt.pitch = 1.1;
+  utt.volume = 1;
+  const voices = window.speechSynthesis.getVoices();
+  const deVoice = voices.find(v => v.lang.startsWith('de') && v.localService) ||
+                  voices.find(v => v.lang.startsWith('de')) ||
+                  voices.find(v => v.lang.startsWith('en')) || null;
+  if (deVoice) utt.voice = deVoice;
+  utt.onstart = () => document.getElementById('voice-status').style.display = 'inline';
+  utt.onend   = () => document.getElementById('voice-status').style.display = 'none';
+  utt.onerror = (e) => {
+    document.getElementById('voice-status').style.display = 'none';
+    console.log('Voice error:', e);
+  };
+  window.speechSynthesis.speak(utt);
 }
 
 function speakText(text) {
   if (!voiceEnabled) return;
+  // Chrome Bug Fix: Cancel + kleine Pause
   window.speechSynthesis.cancel();
-  // Kürze langen Text für Sprachausgabe auf max 400 Zeichen
-  const speakable = text.replace(/[#*_`]/g, '').substring(0, 400);
-  const utt = new SpeechSynthesisUtterance(speakable);
-  utt.lang = 'de-DE';
-  utt.rate = 1.05;
-  utt.pitch = 1.1;
-  // Beste verfügbare deutsche Stimme wählen
-  const voices = window.speechSynthesis.getVoices();
-  const deVoice = voices.find(v => v.lang.startsWith('de') && v.localService) ||
-                  voices.find(v => v.lang.startsWith('de')) || null;
-  if (deVoice) utt.voice = deVoice;
-  utt.onstart = () => document.getElementById('voice-status').style.display = 'inline';
-  utt.onend   = () => document.getElementById('voice-status').style.display = 'none';
-  utt.onerror = () => document.getElementById('voice-status').style.display = 'none';
-  currentUtterance = utt;
-  window.speechSynthesis.speak(utt);
+  setTimeout(() => {
+    const speakable = text.replace(/[#*_`[\]]/g, '').replace(/\n/g,' ').substring(0, 400);
+    const utt = new SpeechSynthesisUtterance(speakable);
+    utt.lang = 'de-DE';
+    utt.rate = 1.05;
+    utt.pitch = 1.1;
+    utt.volume = 1;
+    const voices = window.speechSynthesis.getVoices();
+    const deVoice = voices.find(v => v.lang.startsWith('de') && v.localService) ||
+                    voices.find(v => v.lang.startsWith('de')) ||
+                    voices.find(v => v.lang.startsWith('en')) || null;
+    if (deVoice) utt.voice = deVoice;
+    utt.onstart = () => document.getElementById('voice-status').style.display = 'inline';
+    utt.onend   = () => document.getElementById('voice-status').style.display = 'none';
+    utt.onerror = () => document.getElementById('voice-status').style.display = 'none';
+    currentUtterance = utt;
+    window.speechSynthesis.speak(utt);
+  }, 300);
 }
 
 // ── GEDÄCHTNIS / ZUSAMMENFASSUNG ──
