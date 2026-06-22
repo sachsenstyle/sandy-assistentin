@@ -1,0 +1,1723 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sandy – Deine KI-Assistentin</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --purple-50: #EEEDFE; --purple-200: #AFA9EC; --purple-500: #534AB7; --purple-800: #3C3489; --purple-900: #26215C;
+    --teal-50: #E1F5EE; --teal-400: #1D9E75; --teal-600: #0F6E56;
+    --gray-50: #F8F7F5; --gray-100: #F1EFE8; --gray-200: #D3D1C7; --gray-400: #888780; --gray-700: #444441; --gray-900: #1a1a19;
+    --bg: #F8F7F5; --surface: #ffffff; --border: #E2E0D8; --border-strong: #C8C6BC;
+    --text: #1a1a19; --text-muted: #5F5E5A; --text-hint: #888780;
+    --radius: 12px; --radius-sm: 8px; --radius-pill: 999px;
+    --shadow: 0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.05);
+    --shadow-md: 0 4px 12px rgba(0,0,0,0.08);
+  }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* ── TOP BAR ── */
+  .topbar {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 0 24px;
+    height: 60px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+  .topbar-avatar {
+    width: 36px; height: 36px; border-radius: 50%;
+    background: linear-gradient(135deg, var(--purple-200), var(--teal-400));
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 600; font-size: 15px; color: white; flex-shrink: 0;
+  }
+  .topbar-name { font-weight: 600; font-size: 16px; }
+  .topbar-status { font-size: 12px; color: var(--teal-400); display: flex; align-items: center; gap: 4px; }
+  .status-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--teal-400); }
+  .topbar-right { margin-left: auto; display: flex; align-items: center; gap: 12px; }
+  .clock { font-size: 13px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+
+  /* ── API KEY BANNER ── */
+  .api-banner {
+    background: #FFFBEB;
+    border-bottom: 1px solid #F5E0A0;
+    padding: 10px 24px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 13px;
+    color: #854F0B;
+  }
+  .api-banner input {
+    flex: 1; max-width: 360px;
+    padding: 6px 10px; border-radius: var(--radius-sm);
+    border: 1px solid #F5E0A0; background: white;
+    font-size: 13px; color: var(--text);
+    font-family: monospace;
+  }
+  .api-banner button {
+    padding: 6px 14px; border-radius: var(--radius-sm);
+    background: #854F0B; color: white; border: none;
+    font-size: 13px; cursor: pointer; font-weight: 500;
+  }
+  .api-banner button:hover { background: #633806; }
+  .api-banner.hidden { display: none; }
+
+  /* ── LAYOUT ── */
+  .layout {
+    display: flex;
+    flex: 1;
+    max-width: 1100px;
+    width: 100%;
+    margin: 0 auto;
+    padding: 24px 16px;
+    gap: 20px;
+  }
+
+  /* ── SIDEBAR ── */
+  .sidebar {
+    width: 220px;
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .sidebar-section { font-size: 11px; font-weight: 600; color: var(--text-hint); text-transform: uppercase; letter-spacing: 0.05em; padding: 12px 10px 4px; }
+  .nav-btn {
+    display: flex; align-items: center; gap: 10px;
+    padding: 9px 12px; border-radius: var(--radius-sm);
+    border: none; background: transparent;
+    color: var(--text-muted); font-size: 14px; cursor: pointer;
+    text-align: left; width: 100%; transition: all 0.12s;
+  }
+  .nav-btn:hover { background: var(--gray-100); color: var(--text); }
+  .nav-btn.active { background: var(--purple-50); color: var(--purple-500); font-weight: 500; }
+  .nav-btn .icon { font-size: 16px; width: 20px; text-align: center; }
+
+  .quick-section { margin-top: 8px; }
+  .quick-label { font-size: 11px; font-weight: 600; color: var(--text-hint); text-transform: uppercase; letter-spacing: 0.05em; padding: 10px 10px 6px; }
+  .quick-chip {
+    display: block; width: 100%; text-align: left;
+    padding: 7px 12px; border-radius: var(--radius-sm);
+    border: none; background: transparent;
+    color: var(--text-muted); font-size: 13px; cursor: pointer;
+    transition: all 0.12s; line-height: 1.3;
+  }
+  .quick-chip:hover { background: var(--gray-100); color: var(--text); }
+
+  /* ── MAIN ── */
+  .main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 0; }
+
+  .panel { display: none; flex-direction: column; height: 100%; }
+  .panel.active { display: flex; }
+
+  /* ── CHAT PANEL ── */
+  .chat-messages {
+    flex: 1; overflow-y: auto;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius) var(--radius) 0 0;
+    padding: 20px;
+    display: flex; flex-direction: column; gap: 16px;
+    min-height: 460px; max-height: calc(100vh - 260px);
+  }
+  .chat-messages::-webkit-scrollbar { width: 4px; }
+  .chat-messages::-webkit-scrollbar-thumb { background: var(--gray-200); border-radius: 2px; }
+
+  .msg { display: flex; gap: 10px; align-items: flex-start; max-width: 85%; }
+  .msg.user { flex-direction: row-reverse; align-self: flex-end; }
+  .msg.sandy { align-self: flex-start; }
+
+  .msg-av {
+    width: 32px; height: 32px; border-radius: 50%; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 13px; font-weight: 600;
+  }
+  .msg-av.sandy { background: var(--purple-50); color: var(--purple-500); }
+  .msg-av.user { background: var(--teal-50); color: var(--teal-600); }
+
+  .msg-content { display: flex; flex-direction: column; gap: 3px; }
+  .msg-bubble {
+    padding: 10px 14px; border-radius: 16px;
+    font-size: 14px; line-height: 1.65;
+    white-space: pre-wrap; word-break: break-word;
+  }
+  .msg.sandy .msg-bubble {
+    background: var(--gray-100); color: var(--text);
+    border-radius: 4px 16px 16px 16px;
+  }
+  .msg.user .msg-bubble {
+    background: var(--purple-500); color: white;
+    border-radius: 16px 4px 16px 16px;
+  }
+  .msg-time { font-size: 11px; color: var(--text-hint); padding: 0 4px; }
+  .msg.user .msg-time { text-align: right; }
+
+  .typing-indicator { display: flex; align-items: center; gap: 5px; padding: 10px 14px; background: var(--gray-100); border-radius: 4px 16px 16px 16px; width: fit-content; }
+  .typing-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--gray-400); animation: tdot 1.3s infinite; }
+  .typing-dot:nth-child(2) { animation-delay: 0.2s; }
+  .typing-dot:nth-child(3) { animation-delay: 0.4s; }
+  @keyframes tdot { 0%,60%,100% { transform: scale(0.7); opacity: 0.5; } 30% { transform: scale(1); opacity: 1; } }
+
+  .chat-input-area {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-top: none;
+    border-radius: 0 0 var(--radius) var(--radius);
+    padding: 12px 16px;
+  }
+  .chat-input-row { display: flex; gap: 8px; }
+  .chat-input-row textarea {
+    flex: 1; resize: none; border: 1px solid var(--border);
+    border-radius: var(--radius-sm); padding: 10px 12px;
+    font-size: 14px; font-family: inherit; color: var(--text);
+    background: var(--bg); line-height: 1.5; min-height: 44px; max-height: 120px;
+    transition: border-color 0.12s;
+  }
+  .chat-input-row textarea:focus { outline: none; border-color: var(--purple-200); }
+  .send-btn {
+    padding: 10px 18px; border-radius: var(--radius-sm);
+    background: var(--purple-500); color: white; border: none;
+    font-size: 14px; font-weight: 500; cursor: pointer;
+    transition: background 0.12s; white-space: nowrap; align-self: flex-end;
+  }
+  .send-btn:hover { background: var(--purple-800); }
+  .send-btn:active { transform: scale(0.97); }
+
+  .chat-chips { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+  .chip {
+    padding: 5px 11px; border-radius: var(--radius-pill);
+    border: 1px solid var(--border); background: var(--surface);
+    color: var(--text-muted); font-size: 12px; cursor: pointer;
+    transition: all 0.12s;
+  }
+  .chip:hover { border-color: var(--purple-200); color: var(--purple-500); background: var(--purple-50); }
+
+  .chat-meta { display: flex; justify-content: space-between; align-items: center; margin-top: 6px; }
+  .chat-meta-hint { font-size: 11px; color: var(--text-hint); }
+  .clear-btn { font-size: 12px; color: var(--text-hint); border: none; background: none; cursor: pointer; padding: 2px 6px; border-radius: 4px; }
+  .clear-btn:hover { color: #E24B4A; background: #FCEBEB; }
+
+  /* ── TOOL PANELS ── */
+  .panel-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 20px 24px;
+    margin-bottom: 16px;
+  }
+  .panel-card h3 { font-size: 15px; font-weight: 600; margin-bottom: 4px; }
+  .panel-card p.sub { font-size: 13px; color: var(--text-muted); margin-bottom: 16px; }
+
+  .form-label { font-size: 12px; font-weight: 500; color: var(--text-muted); margin-bottom: 5px; display: block; }
+  .form-input {
+    width: 100%; padding: 9px 12px; border-radius: var(--radius-sm);
+    border: 1px solid var(--border); font-size: 14px; color: var(--text);
+    font-family: inherit; background: var(--bg); transition: border-color 0.12s;
+    margin-bottom: 12px;
+  }
+  .form-input:focus { outline: none; border-color: var(--purple-200); }
+  textarea.form-input { resize: vertical; min-height: 80px; line-height: 1.5; }
+
+  .type-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; margin-bottom: 14px; }
+  .type-card {
+    border: 1px solid var(--border); border-radius: var(--radius-sm);
+    padding: 10px 12px; cursor: pointer; transition: all 0.12s;
+    background: var(--surface);
+  }
+  .type-card:hover { border-color: var(--purple-200); background: var(--purple-50); }
+  .type-card.selected { border-color: var(--purple-500); background: var(--purple-50); }
+  .type-card .tc-icon { font-size: 18px; margin-bottom: 5px; }
+  .type-card h4 { font-size: 13px; font-weight: 500; color: var(--text); }
+  .type-card p { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+
+  .action-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 10px; }
+  .action-card {
+    border: 1px solid var(--border); border-radius: var(--radius-sm);
+    padding: 14px; cursor: pointer; transition: all 0.12s;
+    background: var(--surface); text-align: left;
+  }
+  .action-card:hover { border-color: var(--purple-200); background: var(--purple-50); box-shadow: var(--shadow); }
+  .action-card .ac-icon { font-size: 22px; margin-bottom: 8px; }
+  .action-card h4 { font-size: 13px; font-weight: 500; color: var(--text); margin-bottom: 3px; }
+  .action-card p { font-size: 12px; color: var(--text-muted); line-height: 1.4; }
+
+  .primary-btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 10px 20px; border-radius: var(--radius-sm);
+    background: var(--purple-500); color: white; border: none;
+    font-size: 14px; font-weight: 500; cursor: pointer;
+    transition: background 0.12s;
+  }
+  .primary-btn:hover { background: var(--purple-800); }
+  .primary-btn.full { width: 100%; justify-content: center; }
+
+  /* ── NOTES / MEMO PANEL ── */
+  .notes-area {
+    width: 100%; min-height: 400px; padding: 16px;
+    border: 1px solid var(--border); border-radius: var(--radius-sm);
+    font-size: 14px; color: var(--text); font-family: inherit;
+    background: var(--bg); resize: vertical; line-height: 1.7;
+  }
+  .notes-area:focus { outline: none; border-color: var(--purple-200); }
+  .notes-toolbar { display: flex; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; }
+  .notes-btn {
+    padding: 6px 12px; border-radius: var(--radius-sm);
+    border: 1px solid var(--border); background: var(--surface);
+    font-size: 12px; color: var(--text-muted); cursor: pointer;
+    transition: all 0.12s;
+  }
+  .notes-btn:hover { border-color: var(--purple-200); color: var(--purple-500); background: var(--purple-50); }
+  .save-indicator { font-size: 12px; color: var(--teal-400); margin-left: auto; align-self: center; }
+
+  /* ── INFO BOX ── */
+  .info-box {
+    background: var(--purple-50); border: 1px solid var(--purple-200);
+    border-radius: var(--radius-sm); padding: 10px 14px;
+    font-size: 13px; color: var(--purple-900); margin-bottom: 14px;
+    line-height: 1.5;
+  }
+
+  /* ── RESPONSIVE ── */
+  @media (max-width: 700px) {
+    .layout { flex-direction: column; padding: 12px; }
+    .sidebar { width: 100%; flex-direction: row; flex-wrap: wrap; gap: 4px; }
+    .sidebar-section, .quick-section { display: none; }
+    .nav-btn { padding: 7px 10px; font-size: 13px; }
+    .chat-messages { max-height: 55vh; }
+  }
+</style>
+</head>
+<body>
+
+<!-- TOP BAR -->
+<div class="topbar">
+  <div class="topbar-avatar">S</div>
+  <div>
+    <div class="topbar-name">Sandy</div>
+    <div class="topbar-status"><span class="status-dot"></span> Deine KI-Assistentin</div>
+  </div>
+  <div class="topbar-right">
+    <div class="clock" id="clock">--:--</div>
+    <div class="clock" id="date" style="font-size:12px;"></div>
+  </div>
+</div>
+
+<!-- API KEY BANNER -->
+<div class="api-banner" id="api-banner">
+  ⚠️ API-Schlüssel fehlt.
+  <input type="password" id="api-key-input" placeholder="sk-ant-api03-..." />
+  <button onclick="saveApiKey()">Speichern</button>
+  <span style="font-size:12px; color:#854F0B;">Dein Key wird nur lokal gespeichert (localStorage).</span>
+</div>
+
+<!-- LAYOUT -->
+<div class="layout">
+
+  <!-- SIDEBAR -->
+  <nav class="sidebar">
+    <div class="sidebar-section">Hauptmenü</div>
+    <button class="nav-btn active" onclick="showPanel('chat', this)">
+      <span class="icon">💬</span> Chat mit Sandy
+    </button>
+    <button class="nav-btn" onclick="showPanel('email', this)">
+      <span class="icon">✉️</span> E-Mail schreiben
+    </button>
+    <button class="nav-btn" onclick="showPanel('plan', this)">
+      <span class="icon">📅</span> Arbeitsplan
+    </button>
+    <button class="nav-btn" onclick="showPanel('content', this)">
+      <span class="icon">📱</span> Content & Bücher
+    </button>
+    <button class="nav-btn" onclick="showPanel('kalender', this)">
+      <span class="icon">📅</span> Kalender
+    </button>
+    <button class="nav-btn" onclick="showPanel('mp3', this)">
+      <span class="icon">🎙️</span> MP3 erstellen
+    </button>
+    <button class="nav-btn" onclick="showPanel('notizen', this)">
+      <span class="icon">📝</span> Notizen
+    </button>
+    <button class="nav-btn" onclick="showPanel('settings', this)">
+      <span class="icon">⚙️</span> Einstellungen
+    </button>
+
+    <div class="quick-section">
+      <div class="quick-label">Schnellstart</div>
+      <button class="quick-chip" onclick="showPanel('kalender', null); document.querySelectorAll('.nav-btn').forEach((b,i)=>i===3?b.classList.add('active'):b.classList.remove('active'))">📅 Termin erstellen</button>
+      <button class="quick-chip" onclick="quickSend('Guten Morgen Sandy! Was ist heute mein wichtigster Task?')">☀️ Guten Morgen</button>
+      <button class="quick-chip" onclick="quickSend('Koche mir bitte einen Kaffee ☕')">☕ Kaffee kochen</button>
+      <button class="quick-chip" onclick="quickSend('Erstelle meinen Tagesplan für heute')">✅ Tagesplan</button>
+      <button class="quick-chip" onclick="quickSend('Welche Aufgaben haben für Zwergenbibliothek gerade Priorität?')">📚 Bücher-Check</button>
+      <button class="quick-chip" onclick="quickSend('Motiviere mich kurz für die Arbeit heute!')">✨ Motivation</button>
+    </div>
+  </nav>
+
+  <!-- MAIN CONTENT -->
+  <main class="main">
+
+    <!-- CHAT PANEL -->
+    <div class="panel active" id="panel-chat">
+      <div class="chat-messages" id="chat-messages">
+        <!-- Messages inserted here -->
+      </div>
+      <div class="chat-input-area">
+        <!-- Voice & Memory Bar -->
+        <div style="display:flex; align-items:center; gap:8px; margin-bottom:8px; flex-wrap:wrap;">
+          <button id="mic-btn" onclick="toggleMic()" title="Mikrofon starten" style="display:flex; align-items:center; gap:6px; padding:7px 14px; border-radius:var(--radius-pill); border:1px solid var(--border); background:var(--surface); color:var(--text-muted); font-size:13px; cursor:pointer; transition:all 0.15s;">
+            🎙️ <span id="mic-label">Sprechen</span>
+          </button>
+          <button id="voice-btn" onclick="toggleVoice()" title="Sprachausgabe ein/aus" style="display:flex; align-items:center; gap:6px; padding:7px 14px; border-radius:var(--radius-pill); border:1px solid var(--border); background:var(--surface); color:var(--text-muted); font-size:13px; cursor:pointer; transition:all 0.15s;">
+            🔊 <span id="voice-label">Stimme: Aus</span>
+          </button>
+          <button onclick="summarizeChat()" title="Gespräch zusammenfassen & dauerhaft merken" style="display:flex; align-items:center; gap:6px; padding:7px 14px; border-radius:var(--radius-pill); border:1px solid var(--purple-200); background:var(--purple-50); color:var(--purple-500); font-size:13px; cursor:pointer; font-weight:500; transition:all 0.15s;">
+            🧠 Jetzt merken
+          </button>
+          <!-- Bild Upload Button -->
+          <button onclick="document.getElementById('img-upload').click()" title="Bild oder Screenshot hochladen" style="display:flex; align-items:center; gap:6px; padding:7px 14px; border-radius:var(--radius-pill); border:1px solid var(--border); background:var(--surface); color:var(--text-muted); font-size:13px; cursor:pointer; transition:all 0.15s;">
+            🖼️ Bild
+          </button>
+          <input type="file" id="img-upload" accept="image/*" style="display:none;" onchange="handleImageUpload(event)" />
+          <div id="mic-status" style="font-size:12px; color:var(--teal-400); display:none;">● Aufnahme läuft...</div>
+          <div id="voice-status" style="font-size:12px; color:var(--purple-500); display:none;">▶ Sandy spricht...</div>
+        </div>
+
+        <!-- Bild Vorschau -->
+        <div id="img-preview-box" style="display:none; margin-bottom:8px; position:relative; width:fit-content;">
+          <img id="img-preview" src="" style="max-height:120px; max-width:100%; border-radius:var(--radius-sm); border:1px solid var(--border);" />
+          <button onclick="removeImage()" style="position:absolute; top:-6px; right:-6px; width:20px; height:20px; border-radius:50%; background:#E24B4A; color:white; border:none; cursor:pointer; font-size:11px; display:flex; align-items:center; justify-content:center;">✕</button>
+          <div style="font-size:11px; color:var(--teal-400); margin-top:3px;">✓ Bild bereit — Sandy analysiert es mit deiner Nachricht</div>
+        </div>
+
+        <!-- Summary display -->
+        <div id="memory-box" style="display:none; background:var(--purple-50); border:1px solid var(--purple-200); border-radius:var(--radius-sm); padding:8px 12px; font-size:12px; color:var(--purple-900); margin-bottom:8px; line-height:1.5;">
+          <strong>🧠 Sandy merkt sich:</strong> <span id="memory-text"></span>
+          <button onclick="clearMemory()" style="float:right; border:none; background:none; color:var(--text-hint); cursor:pointer; font-size:11px;">✕ löschen</button>
+        </div>
+        <div class="chat-chips">
+          <button class="chip" onclick="quickSend('Was sind meine dringendsten Aufgaben heute?')">🎯 Prioritäten</button>
+          <button class="chip" onclick="quickSend('Erstelle eine E-Mail an einen Kooperationspartner')">📧 E-Mail</button>
+          <button class="chip" onclick="quickSend('Gib mir Ideen für meinen nächsten Affiliate-Post')">💡 Ideen</button>
+          <button class="chip" onclick="quickSend('Wie teile ich meine Zeit diese Woche optimal auf?')">⏱️ Zeitplan</button>
+        </div>
+        <div class="chat-input-row" style="margin-top:8px;">
+          <textarea id="chat-input" placeholder="Schreib oder sprich mit Sandy... oder lade ein Bild hoch 🖼️" rows="1"
+            onkeydown="handleKey(event)" oninput="autoGrow(this)"></textarea>
+          <button class="send-btn" onclick="sendMsg()">Senden →</button>
+        </div>
+        <div class="chat-meta">
+          <span class="chat-meta-hint">Enter = Senden · Shift+Enter = neue Zeile · 🖼️ = Bild hochladen</span>
+          <button class="clear-btn" onclick="clearChat()">Chat löschen</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- EMAIL PANEL -->
+    <div class="panel" id="panel-email">
+      <div class="panel-card">
+        <h3>E-Mail schreiben lassen</h3>
+        <p class="sub">Sandy schreibt dir die fertige E-Mail — du musst nur den Kontext eingeben.</p>
+
+        <div class="info-box">Wähle einen E-Mail-Typ und fülle die Details aus. Sandy schreibt dann die komplette E-Mail mit Betreff und Text.</div>
+
+        <label class="form-label">E-Mail-Typ</label>
+        <div class="type-grid" id="email-type-grid">
+          <div class="type-card" onclick="selectEmailType(this, 'Kooperationsanfrage an einen Affiliate- oder Business-Partner')">
+            <div class="tc-icon">🤝</div>
+            <h4>Kooperation</h4>
+            <p>Affiliate & Partner</p>
+          </div>
+          <div class="type-card" onclick="selectEmailType(this, 'Professionelle Kundenantwort oder Support-E-Mail')">
+            <div class="tc-icon">👤</div>
+            <h4>Kundenantwort</h4>
+            <p>Support & Rückmeldung</p>
+          </div>
+          <div class="type-card" onclick="selectEmailType(this, 'Newsletter oder MailerLite Kampagnen-E-Mail für meine Leser und Kunden')">
+            <div class="tc-icon">📰</div>
+            <h4>Newsletter</h4>
+            <p>MailerLite Kampagne</p>
+          </div>
+          <div class="type-card" onclick="selectEmailType(this, 'Follow-up E-Mail nach einem ersten Kontakt oder einer Anfrage')">
+            <div class="tc-icon">🔄</div>
+            <h4>Follow-up</h4>
+            <p>Nachfassen</p>
+          </div>
+          <div class="type-card" onclick="selectEmailType(this, 'Sales-E-Mail für ein digitales Produkt oder Tool (Digistore24)')">
+            <div class="tc-icon">💰</div>
+            <h4>Sales-E-Mail</h4>
+            <p>Digistore24 Produkt</p>
+          </div>
+          <div class="type-card" onclick="selectEmailType(this, 'Allgemeine geschäftliche E-Mail')">
+            <div class="tc-icon">📨</div>
+            <h4>Allgemein</h4>
+            <p>Sonstiges</p>
+          </div>
+        </div>
+
+        <label class="form-label">An wen & worum geht es?</label>
+        <textarea class="form-input" id="email-details" placeholder="z.B.: An einen Blogger der über KI-Tools schreibt. Ich möchte eine Gastbeitrag-Kooperation vorschlagen und auf TestNavigator hinweisen..."></textarea>
+
+        <label class="form-label">Ton der E-Mail</label>
+        <select class="form-input" id="email-tone" style="height:40px;">
+          <option value="professionell und freundlich">Professionell & freundlich</option>
+          <option value="formell und sachlich">Formell & sachlich</option>
+          <option value="herzlich und persönlich">Herzlich & persönlich</option>
+          <option value="überzeugend und verkaufsorientiert">Überzeugend (Sales)</option>
+        </select>
+
+        <button class="primary-btn full" onclick="generateEmail()">✉️ E-Mail von Sandy schreiben lassen →</button>
+      </div>
+    </div>
+
+    <!-- PLAN PANEL -->
+    <div class="panel" id="panel-plan">
+      <div class="panel-card">
+        <h3>Arbeitsplan erstellen</h3>
+        <p class="sub">Sandy koordiniert deine Projekte und teilt deine Zeit optimal auf.</p>
+
+        <label class="form-label">Welchen Zeitraum soll Sandy planen?</label>
+        <select class="form-input" id="plan-period" style="height:40px;">
+          <option value="heute">Heute</option>
+          <option value="diese Woche" selected>Diese Woche</option>
+          <option value="diese Woche und nächste Woche">2 Wochen</option>
+          <option value="diesen Monat">Diesen Monat</option>
+        </select>
+
+        <label class="form-label">Schwerpunkt-Projekte (was hat gerade Priorität?)</label>
+        <textarea class="form-input" id="plan-focus" placeholder="z.B.: Buch 3 Affiliate Marketing fertigstellen, TafelGold Instagram-Posts für Juli, TestNavigator Tool-Updates..."></textarea>
+
+        <label class="form-label">Verfügbare Zeit pro Tag</label>
+        <select class="form-input" id="plan-hours" style="height:40px;">
+          <option value="2-3 Stunden">2–3 Stunden</option>
+          <option value="4-5 Stunden">4–5 Stunden</option>
+          <option value="6-8 Stunden" selected>6–8 Stunden (Vollzeit)</option>
+          <option value="flexibel, je nach Tag">Flexibel</option>
+        </select>
+
+        <button class="primary-btn full" onclick="generatePlan()">📅 Arbeitsplan erstellen →</button>
+      </div>
+
+      <div class="panel-card">
+        <h3>Schnell-Tasks</h3>
+        <div class="action-grid">
+          <div class="action-card" onclick="quickSend('Erstelle eine Prioritätenliste für heute: Was ist dringend, was ist wichtig, was kann warten? Projekte: Bücher, Tools, Affiliate, Krypto, TafelGold')">
+            <div class="ac-icon">🎯</div>
+            <h4>Prioritätenliste</h4>
+            <p>Dringend vs. wichtig sortieren</p>
+          </div>
+          <div class="action-card" onclick="quickSend('Erstelle einen Posting-Kalender für 4 Wochen. Montag/Mittwoch/Freitag/Sonntag abends für Nivora Graufeder (Bücher), Dienstag/Donnerstag/Samstag abends für TestNavigator (Tools). Themen-Ideen gerne ergänzen.')">
+            <div class="ac-icon">📆</div>
+            <h4>Posting-Kalender</h4>
+            <p>4 Wochen Social Media</p>
+          </div>
+          <div class="action-card" onclick="quickSend('Erstelle eine Deadline-Übersicht für alle laufenden Projekte: Buch 3 (Zwergenbibliothek), Buch 3 (Affiliate Marketing), TafelGold Launch, HeyGen-Umstieg Juli 2026, Supabase Datenmodell')">
+            <div class="ac-icon">⏰</div>
+            <h4>Deadline-Check</h4>
+            <p>Alle Projekte im Blick</p>
+          </div>
+          <div class="action-card" onclick="quickSend('Welche 3 Dinge sollte ich diese Woche auf jeden Fall erledigen, um mein Business voranzubringen?')">
+            <div class="ac-icon">🚀</div>
+            <h4>Top 3 diese Woche</h4>
+            <p>Business voranbringen</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- CONTENT PANEL -->
+    <div class="panel" id="panel-content">
+      <div class="panel-card">
+        <h3>Content & Bücher</h3>
+        <p class="sub">Sandy unterstützt dich bei Buchideen, Social Media und Affiliate-Content.</p>
+        <div class="action-grid">
+          <div class="action-card" onclick="quickSend('Erstelle 10 Kapitelideen für mein Buch 3 über Affiliate Marketing mit KI-Tools (ChatGPT, Claude, DALL-E, Perplexity). Das Buch richtet sich an Einsteiger die online Geld verdienen wollen.')">
+            <div class="ac-icon">📚</div>
+            <h4>Buch 3 – Affiliate</h4>
+            <p>Kapitelideen & Struktur</p>
+          </div>
+          <div class="action-card" onclick="quickSend('Erstelle 10 Kapitelideen für mein Buch 3 über KI-Trading-Bots. Es baut auf Buch 2 auf, ohne Wiederholungen. Fokus: Fortgeschrittene Strategien, Risikoanalyse, Optimierung')">
+            <div class="ac-icon">📈</div>
+            <h4>Buch 3 – Trading</h4>
+            <p>KI-Bots, Fortsetzung</p>
+          </div>
+          <div class="action-card" onclick="quickSend('Erstelle 7 Instagram-Posts für Nivora Graufeder (Bücher/Zwergenbibliothek). Postingzeiten: Mo/Mi/Fr/So abends. Format: Hook, Caption, Hashtags getrennt.')">
+            <div class="ac-icon">📸</div>
+            <h4>Instagram Nivora</h4>
+            <p>7 Posts, Hook + Caption</p>
+          </div>
+          <div class="action-card" onclick="quickSend('Erstelle 7 Social Media Posts für TestNavigator (digitale Tools, Affiliate). Postingzeiten: Di/Do/Sa abends. Format: Hook, Caption, Hashtags getrennt. Produkt: KI Untertitel Pro, LeadRocket')">
+            <div class="ac-icon">🛠️</div>
+            <h4>TestNavigator Posts</h4>
+            <p>Tool & Affiliate Content</p>
+          </div>
+          <div class="action-card" onclick="quickSend('Erstelle 5 Pinterest-Pins und 5 Instagram-Posts für TafelGold (Food Influencer, Sommerrezepte, Juni-Juli Thema). Ramonas Tochter betreibt diesen Account in München.')">
+            <div class="ac-icon">🍽️</div>
+            <h4>TafelGold Content</h4>
+            <p>Food & Sommer-Thema</p>
+          </div>
+          <div class="action-card" onclick="quickSend('Schreibe eine überzeugende Produktbeschreibung für KI Untertitel Pro (27€, Digistore24 Produkt). Tool für automatische Untertitel-Generierung mit KI.')">
+            <div class="ac-icon">💎</div>
+            <h4>Produkttext</h4>
+            <p>Digistore24 Beschreibung</p>
+          </div>
+          <div class="action-card" onclick="quickSend('Gib mir 10 Affiliate-Marketing-Ideen die ich mit meinen vorhandenen Tools (TestNavigator, LeadRocket, KI Untertitel Pro) umsetzen kann. Plattformen: Digistore24, Amazon, ClickBank')">
+            <div class="ac-icon">💸</div>
+            <h4>Affiliate-Ideen</h4>
+            <p>Neue Einnahmen-Strategien</p>
+          </div>
+          <div class="action-card" onclick="quickSend('Erstelle eine E-Mail-Sequenz (Willkommen + 3 Follow-ups) für neue Abonnenten meines TestNavigator-Newsletters. Produkt: KI Untertitel Pro, 27€, Digistore24')">
+            <div class="ac-icon">📧</div>
+            <h4>E-Mail-Sequenz</h4>
+            <p>MailerLite Automation</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- KALENDER PANEL -->
+    <div class="panel" id="panel-kalender">
+      <div class="panel-card">
+        <h3>Termin in Google Kalender erstellen</h3>
+        <p class="sub">Sandy erstellt einen fertigen Link — ein Klick und der Termin ist in deinem Google Kalender vorausgefüllt.</p>
+
+        <div class="info-box">📅 Kein Login nötig, kein API-Setup. Sandy generiert einen direkten Google Kalender Link den du einfach anklickst.</div>
+
+        <label class="form-label">Was ist der Termin?</label>
+        <input type="text" class="form-input" id="cal-title" placeholder="z.B.: Buch 3 Kapitel 1 schreiben, TafelGold Meeting, Krypto-Check..." />
+
+        <label class="form-label">Datum</label>
+        <input type="date" class="form-input" id="cal-date" />
+
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+          <div>
+            <label class="form-label">Uhrzeit von</label>
+            <input type="time" class="form-input" id="cal-start" value="10:00" />
+          </div>
+          <div>
+            <label class="form-label">Uhrzeit bis</label>
+            <input type="time" class="form-input" id="cal-end" value="11:00" />
+          </div>
+        </div>
+
+        <label class="form-label">Notizen / Beschreibung (optional)</label>
+        <textarea class="form-input" id="cal-desc" placeholder="Was soll vorbereitet werden? Welche Unterlagen brauchst du?" style="min-height:70px;"></textarea>
+
+        <label class="form-label">Wiederholung</label>
+        <select class="form-input" id="cal-repeat" style="height:40px;">
+          <option value="">Kein Wiederholung</option>
+          <option value="DAILY">Täglich</option>
+          <option value="WEEKLY">Wöchentlich</option>
+          <option value="MONTHLY">Monatlich</option>
+        </select>
+
+        <button class="primary-btn full" onclick="createCalLink()" style="margin-bottom:12px;">📅 Google Kalender Link erstellen →</button>
+
+        <div id="cal-result" style="display:none; margin-top:8px;">
+          <div style="background:var(--teal-50); border:1px solid #9FE1CB; border-radius:var(--radius-sm); padding:14px 16px;">
+            <div style="font-size:13px; font-weight:500; color:var(--teal-600); margin-bottom:8px;">✓ Termin bereit!</div>
+            <div id="cal-summary" style="font-size:13px; color:var(--text-muted); margin-bottom:12px;"></div>
+            <a id="cal-link" href="#" target="_blank" style="display:inline-flex; align-items:center; gap:6px; padding:10px 18px; background:#1D9E75; color:white; border-radius:var(--radius-sm); font-size:14px; font-weight:500; text-decoration:none;">
+              📅 In Google Kalender öffnen →
+            </a>
+            <button onclick="copyCalLink()" style="margin-left:8px; padding:10px 14px; border-radius:var(--radius-sm); border:1px solid #9FE1CB; background:white; color:var(--teal-600); font-size:13px; cursor:pointer;">Link kopieren</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel-card">
+        <h3>Schnell-Termine</h3>
+        <p class="sub">Klick auf einen Typ — Sandy füllt die Felder vor.</p>
+        <div class="action-grid">
+          <div class="action-card" onclick="prefillCal('Buch 3 schreiben – Affiliate Marketing','10:00','12:00','Fokus: Kapitel ausarbeiten, keine Ablenkung')">
+            <div class="ac-icon">📚</div>
+            <h4>Schreibzeit Buch 3</h4>
+            <p>2h Fokus-Block</p>
+          </div>
+          <div class="action-card" onclick="prefillCal('Social Media Posts erstellen','14:00','15:30','Hooks, Captions und Hashtags für alle Marken')">
+            <div class="ac-icon">📱</div>
+            <h4>Social Media</h4>
+            <p>Posts erstellen & planen</p>
+          </div>
+          <div class="action-card" onclick="prefillCal('Krypto & Investment Check','09:00','09:30','Portfolio prüfen, Bot-Performance, ETF-Check')">
+            <div class="ac-icon">📈</div>
+            <h4>Krypto-Check</h4>
+            <p>Portfolio & Bot</p>
+          </div>
+          <div class="action-card" onclick="prefillCal('E-Mails & Anfragen bearbeiten','08:30','09:30','Posteingang leeren, Kooperationsanfragen beantworten')">
+            <div class="ac-icon">📧</div>
+            <h4>E-Mail Block</h4>
+            <p>Posteingang bearbeiten</p>
+          </div>
+          <div class="action-card" onclick="prefillCal('TafelGold Content Planung','15:00','16:00','Posts planen, Fotos auswählen, Captions schreiben')">
+            <div class="ac-icon">🍽️</div>
+            <h4>TafelGold</h4>
+            <p>Content & Planung</p>
+          </div>
+          <div class="action-card" onclick="prefillCal('TestNavigator Tool-Update','13:00','15:00','Tool weiterentwickeln, Bugs fixen, neue Features')">
+            <div class="ac-icon">🛠️</div>
+            <h4>Tool-Entwicklung</h4>
+            <p>TestNavigator Update</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel-card">
+        <h3>Per Chat planen lassen</h3>
+        <p class="sub">Beschreibe Sandy deinen Termin in normaler Sprache — sie erstellt den Link.</p>
+        <div style="display:flex; gap:8px; margin-bottom:10px;">
+          <input type="text" class="form-input" id="cal-chat-input" style="margin:0; flex:1;" placeholder='z.B.: "Morgen um 10 Uhr 2 Stunden Buch schreiben"' onkeydown="if(event.key==='Enter') parseCalFromChat()" />
+          <button class="primary-btn" onclick="parseCalFromChat()" style="white-space:nowrap;">Sandy fragen →</button>
+        </div>
+        <div id="cal-chat-result" style="display:none;"></div>
+      </div>
+    </div>
+
+    <!-- MP3 PANEL -->
+    <div class="panel" id="panel-mp3">
+      <div class="panel-card">
+        <h3>🎙️ MP3 erstellen mit ElevenLabs</h3>
+        <p class="sub">Text eingeben oder von Sandy schreiben lassen — dann als MP3 herunterladen. Perfekt für Hörbücher, Freebies und Landingpage-Audios.</p>
+
+        <div class="info-box">🔑 Du brauchst deinen ElevenLabs API-Key (unter elevenlabs.io → Profile → API Key). Wird lokal gespeichert.</div>
+
+        <label class="form-label">ElevenLabs API-Key</label>
+        <div style="display:flex; gap:8px; margin-bottom:16px;">
+          <input type="password" class="form-input" id="el-api-key" placeholder="sk_..." style="margin:0; flex:1;" />
+          <button class="primary-btn" onclick="saveElKey()" style="white-space:nowrap;">Speichern</button>
+        </div>
+
+        <hr style="border:none; border-top:1px solid var(--border); margin-bottom:16px;">
+
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:14px;">
+          <div>
+            <label class="form-label">Stimme</label>
+            <select class="form-input" id="el-voice" style="height:40px;">
+              <option value="21m00Tcm4TlvDq8ikWAM">Rachel (EN, warm)</option>
+              <option value="AZnzlk1XvdvUeBnXmlld">Domi (EN, stark)</option>
+              <option value="EXAVITQu4vr4xnSDxMaL">Bella (EN, sanft)</option>
+              <option value="ErXwobaYiN019PkySvjV">Antoni (EN, tief)</option>
+              <option value="MF3mGyEYCl7XYWbV9V6O">Elli (EN, jung)</option>
+              <option value="TxGEqnHWrfWFTfGW9XjX">Josh (EN, männlich)</option>
+              <option value="VR6AewLTigWG4xSOukaG">Arnold (EN, kräftig)</option>
+              <option value="pNInz6obpgDQGcFmaJgB">Adam (EN, professionell)</option>
+            </select>
+          </div>
+          <div>
+            <label class="form-label">Modell</label>
+            <select class="form-input" id="el-model" style="height:40px;">
+              <option value="eleven_multilingual_v2">Multilingual v2 (DE empfohlen)</option>
+              <option value="eleven_turbo_v2_5">Turbo v2.5 (schnell)</option>
+              <option value="eleven_monolingual_v1">Monolingual v1 (EN)</option>
+            </select>
+          </div>
+        </div>
+
+        <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:12px; margin-bottom:16px;">
+          <div>
+            <label class="form-label">Stabilität</label>
+            <input type="range" id="el-stability" min="0" max="100" value="50" oninput="document.getElementById('el-stab-val').textContent=this.value+'%'" style="width:100%;" />
+            <div style="font-size:12px; color:var(--text-muted); text-align:center;" id="el-stab-val">50%</div>
+          </div>
+          <div>
+            <label class="form-label">Ähnlichkeit</label>
+            <input type="range" id="el-similarity" min="0" max="100" value="75" oninput="document.getElementById('el-sim-val').textContent=this.value+'%'" style="width:100%;" />
+            <div style="font-size:12px; color:var(--text-muted); text-align:center;" id="el-sim-val">75%</div>
+          </div>
+          <div>
+            <label class="form-label">Stil</label>
+            <input type="range" id="el-style" min="0" max="100" value="30" oninput="document.getElementById('el-style-val').textContent=this.value+'%'" style="width:100%;" />
+            <div style="font-size:12px; color:var(--text-muted); text-align:center;" id="el-style-val">30%</div>
+          </div>
+        </div>
+
+        <label class="form-label">Text für die MP3</label>
+        <textarea class="form-input" id="el-text" style="min-height:160px;" placeholder="Hier den Text eingeben der vorgelesen werden soll...&#10;&#10;Oder lass Sandy einen Text schreiben (Button unten)!"></textarea>
+
+        <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:14px;">
+          <button class="primary-btn" onclick="generateMp3()">🎙️ MP3 erstellen →</button>
+          <button style="padding:10px 16px; border-radius:var(--radius-sm); border:1px solid var(--border); background:var(--surface); color:var(--text-muted); font-size:14px; cursor:pointer;" onclick="sandyWriteText()">✨ Sandy schreibt Text</button>
+          <button style="padding:10px 16px; border-radius:var(--radius-sm); border:1px solid var(--border); background:var(--surface); color:var(--text-muted); font-size:14px; cursor:pointer;" onclick="clearMp3Text()">🗑️ Text löschen</button>
+        </div>
+
+        <div id="mp3-status" style="display:none; padding:12px 16px; border-radius:var(--radius-sm); font-size:14px; margin-bottom:12px;"></div>
+
+        <div id="mp3-result" style="display:none;">
+          <div style="background:var(--teal-50); border:1px solid #9FE1CB; border-radius:var(--radius-sm); padding:16px;">
+            <div style="font-size:13px; font-weight:500; color:var(--teal-600); margin-bottom:10px;">✓ MP3 fertig!</div>
+            <audio id="mp3-player" controls style="width:100%; margin-bottom:12px;"></audio>
+            <a id="mp3-download" href="#" download="sandy-audio.mp3" style="display:inline-flex; align-items:center; gap:6px; padding:10px 18px; background:#1D9E75; color:white; border-radius:var(--radius-sm); font-size:14px; font-weight:500; text-decoration:none;">⬇️ MP3 herunterladen</a>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel-card">
+        <h3>Schnell-Texte für Sandy</h3>
+        <p class="sub">Sandy schreibt den Text — du wählst nur das Thema.</p>
+        <div class="action-grid">
+          <div class="action-card" onclick="sandyWriteSpecific('Schreibe eine kurze, zauberhafte Mini-Geschichte (ca. 150 Wörter) für ein Kinder-Ausmalbuch. Die Geschichte soll ein Kind auf eine Fantasiereise mitnehmen, mit bunten Tieren und magischen Orten. Ton: warmherzig, bildhaft, träumerisch.')">
+            <div class="ac-icon">🧚</div>
+            <h4>Fantasie-Geschichte</h4>
+            <p>Ausmalbuch Freebie</p>
+          </div>
+          <div class="action-card" onclick="sandyWriteSpecific('Schreibe einen professionellen Willkommenstext (ca. 100 Wörter) für ein Hörbuch-Freebie der Marke Nivora Graufeder / Zwergenbibliothek. Ton: herzlich, einladend, neugierig machend.')">
+            <div class="ac-icon">📚</div>
+            <h4>Hörbuch-Intro</h4>
+            <p>Zwergenbibliothek Freebie</p>
+          </div>
+          <div class="action-card" onclick="sandyWriteSpecific('Schreibe einen kurzen, überzeugenden Landingpage-Audiotext (ca. 80 Wörter) für TestNavigator / KI Untertitel Pro (27€, Digistore24). Ton: professionell, direkt, nutzenorientiert.')">
+            <div class="ac-icon">🛠️</div>
+            <h4>Landingpage Audio</h4>
+            <p>TestNavigator / Tool</p>
+          </div>
+          <div class="action-card" onclick="sandyWriteSpecific('Schreibe eine kurze Podcast-Intro (ca. 60 Wörter) für einen digitalen Unternehmer-Podcast. Thema: KI-Tools für Selbstständige. Ton: energiegeladen, motivierend, modern.')">
+            <div class="ac-icon">🎧</div>
+            <h4>Podcast-Intro</h4>
+            <p>KI & Business</p>
+          </div>
+          <div class="action-card" onclick="sandyWriteSpecific('Schreibe eine E-Mail-Willkommensnachricht als Audio (ca. 80 Wörter) für neue Newsletter-Abonnenten von Nivora Graufeder. Sie erhalten als Freebie das erste Kapitel von K17. Ton: persönlich, warm, neugierig machend.')">
+            <div class="ac-icon">✉️</div>
+            <h4>Newsletter-Audio</h4>
+            <p>K17 Freebie Willkommen</p>
+          </div>
+          <div class="action-card" onclick="sandyWriteSpecific('Schreibe einen kurzen, kreativen Social-Media-Clip-Text (ca. 50 Wörter) als Voice-Over für ein Instagram Reel über TafelGold (Food Influencer, Sommerrezepte). Ton: lebendig, appetitanregend, trendig.')">
+            <div class="ac-icon">🍽️</div>
+            <h4>Reel Voice-Over</h4>
+            <p>TafelGold Instagram</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- NOTIZEN PANEL -->
+    <div class="panel" id="panel-notizen">
+      <div class="panel-card">
+        <h3>Notizen & Ideen</h3>
+        <p class="sub">Deine persönlichen Notizen — werden automatisch lokal gespeichert.</p>
+        <div class="notes-toolbar">
+          <button class="notes-btn" onclick="addNoteTemplate('## Idee\n\n**Projekt:** \n**Beschreibung:** \n**Nächster Schritt:** \n\n---\n\n')">+ Idee</button>
+          <button class="notes-btn" onclick="addNoteTemplate('## Termin\n\n**Datum:** \n**Was:** \n**Vorbereitung:** \n\n---\n\n')">+ Termin</button>
+          <button class="notes-btn" onclick="addNoteTemplate('## To-Do\n\n- [ ] \n- [ ] \n- [ ] \n\n---\n\n')">+ To-Do</button>
+          <button class="notes-btn" onclick="addNoteTemplate('## E-Mail Entwurf\n\n**An:** \n**Betreff:** \n\nText hier...\n\n---\n\n')">+ E-Mail Entwurf</button>
+          <span class="save-indicator" id="save-indicator"></span>
+        </div>
+        <textarea class="notes-area" id="notes-area" placeholder="Hier kannst du Ideen, Termine, To-Dos notieren... Alles wird automatisch lokal gespeichert." oninput="saveNotes()"></textarea>
+      </div>
+    </div>
+
+    <!-- SETTINGS PANEL -->
+    <div class="panel" id="panel-settings">
+      <div class="panel-card">
+        <h3>Einstellungen</h3>
+        <p class="sub">API-Schlüssel und persönliche Einstellungen für Sandy.</p>
+
+        <label class="form-label">Anthropic API-Schlüssel</label>
+        <input type="password" class="form-input" id="settings-api-key" placeholder="sk-ant-api03-..." />
+        <button class="primary-btn" onclick="saveApiKeyFromSettings()" style="margin-bottom:20px;">Speichern</button>
+
+        <hr style="border:none; border-top:1px solid var(--border); margin-bottom:20px;">
+
+        <label class="form-label">Sandy's Kontext – Deine Business-Info anpassen</label>
+        <textarea class="form-input" id="custom-context" style="min-height:200px;"
+          placeholder="Hier kannst du Sandy zusätzlichen Kontext geben, z.B. aktuelle Projekte, Deadlines, Prioritäten..."></textarea>
+        <button class="primary-btn" onclick="saveContext()">Kontext speichern</button>
+
+        <hr style="border:none; border-top:1px solid var(--border); margin:20px 0;">
+        <label class="form-label" style="color:#E24B4A;">Daten löschen</label>
+        <div style="display:flex; gap:8px; flex-wrap:wrap;">
+          <button onclick="clearChatHistory()" style="padding:8px 14px; border-radius:var(--radius-sm); border:1px solid #F7C1C1; background:#FCEBEB; color:#A32D2D; font-size:13px; cursor:pointer;">Chat-Verlauf löschen</button>
+          <button onclick="clearNotes()" style="padding:8px 14px; border-radius:var(--radius-sm); border:1px solid #F7C1C1; background:#FCEBEB; color:#A32D2D; font-size:13px; cursor:pointer;">Notizen löschen</button>
+          <button onclick="clearAll()" style="padding:8px 14px; border-radius:var(--radius-sm); border:1px solid #F7C1C1; background:#FCEBEB; color:#A32D2D; font-size:13px; cursor:pointer;">Alles löschen</button>
+        </div>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<script>
+// ── CONSTANTS ──
+const SANDY_SYSTEM = `Du bist Sandy, die professionelle, herzliche und zuverlässige KI-Sekretärin von Ramona Junggebauer aus Zwickau, Deutschland.
+
+RAMONAS BUSINESS (immer berücksichtigen):
+- Selbstständige Autorin, Tool-Entwicklerin, Affiliate-Marketerin und Investorin
+- Bücher unter dem Pseudonym "Nivora Graufeder" und der Marke "Zwergenbibliothek" (Amazon KDP)
+- "TestNavigator": digitale KI-Tools (Digistore24), Affiliate Marketing (LeadRocket Suite)
+- "TafelGold": Food Influencer Projekt für ihre Tochter in München
+- Krimireihe "Ein Fall für K17" (spielt in München, Pseudonym Nivora Graufeder)
+- 5 Einkommensquellen: Bücher (KDP), Krypto-Bot, ETF/Aktien, Tool-Verkäufe (Digistore24), Affiliate
+- Tools auf Cloudflare Pages, MailerLite für E-Mail-Marketing, HeyGen für Videos (ab Juli 2026)
+- Aktuelle Projekte: Buch 3 Affiliate Marketing mit KI, Buch 3 Trading-Bots, Supabase Datenmodell, TafelGold Social Media Launch
+- Social Media: Mo/Mi/Fr/So abends für Nivora Graufeder; Di/Do/Sa abends für TestNavigator
+- Prefers Buffer zum Planen; DALL-E für Bilder; Inhalte immer in getrennten Blöcken (Hooks, Captions, Hashtags)
+- Verheiratet mit Jürgen Gebauer (Polizeibeamter); lebt in Zwickau; Tochter in München
+
+DEINE PERSÖNLICHKEIT & REGELN:
+- Herzlich, professionell, direkt — du bist Ramonas rechte Hand
+- Du kennst ihr Business in- und auswendig und denkst voraus
+- Redet Ramona mit "du" an, bleibt aber professionell
+- Organisiert, strukturiert, lösungsorientiert und motivierend
+- Wenn jemand Kaffee erwähnt: antworte mit einer kurzen, witzigen Kaffee-Anmerkung ☕
+- Schreibst auf Deutsch, präzise, ohne Füllwörter
+- Verwende Formatierung (Listen, Absätze, Emojis) wenn es die Lesbarkeit verbessert
+- Bei E-Mails: immer vollständige E-Mail mit Betreff, Anrede, Text und Grußformel
+
+FÄHIGKEITEN:
+- Vollständige E-Mails schreiben (Kooperationen, Kunden, Newsletter, Sales, Follow-ups)
+- Arbeitspläne, Prioritätenlisten und Deadline-Übersichten erstellen
+- Social Media Content (Hooks, Captions, Hashtags) für alle Marken
+- Buchideen, Kapitelstruktur, Texte und Skripte
+- Business-Analysen und strategische Handlungsempfehlungen
+- Terminplanung und Erinnerungen
+- Motivation und Tagesstruktur`;
+
+const STORAGE_KEYS = {
+  apiKey: 'sandy_api_key',
+  chatHistory: 'sandy_chat_history',
+  notes: 'sandy_notes',
+  context: 'sandy_custom_context'
+};
+
+let chatHistory = [];
+let selectedEmailType = '';
+let saveNotesTimer = null;
+
+// ── INIT ──
+function init() {
+  updateClock();
+  setInterval(updateClock, 30000);
+  loadApiKey();
+  loadChatHistory();
+  loadNotes();
+  loadContext();
+  loadElKey();
+  loadMemory();
+  // Stimmen vorladen (Chrome braucht onvoiceschanged)
+  if (window.speechSynthesis.onvoiceschanged !== undefined) {
+    window.speechSynthesis.onvoiceschanged = () => window.speechSynthesis.getVoices();
+  }
+  window.speechSynthesis.getVoices();
+  if (chatHistory.length === 0) addWelcomeMessage();
+}
+
+function updateClock() {
+  const now = new Date();
+  document.getElementById('clock').textContent = now.toLocaleTimeString('de-DE', {hour:'2-digit', minute:'2-digit'});
+  document.getElementById('date').textContent = now.toLocaleDateString('de-DE', {weekday:'short', day:'numeric', month:'short', year:'numeric'});
+}
+
+// ── API KEY ──
+function loadApiKey() {
+  const key = localStorage.getItem(STORAGE_KEYS.apiKey);
+  if (key) {
+    document.getElementById('api-banner').classList.add('hidden');
+    if (document.getElementById('settings-api-key')) {
+      document.getElementById('settings-api-key').value = key;
+    }
+  }
+}
+
+function saveApiKey() {
+  const val = document.getElementById('api-key-input').value.trim();
+  if (!val.startsWith('sk-ant')) { alert('Bitte einen gültigen Anthropic API-Schlüssel eingeben (beginnt mit sk-ant)'); return; }
+  localStorage.setItem(STORAGE_KEYS.apiKey, val);
+  document.getElementById('api-banner').classList.add('hidden');
+  if (document.getElementById('settings-api-key')) document.getElementById('settings-api-key').value = val;
+}
+
+function saveApiKeyFromSettings() {
+  const val = document.getElementById('settings-api-key').value.trim();
+  if (!val) { alert('Bitte einen API-Schlüssel eingeben'); return; }
+  localStorage.setItem(STORAGE_KEYS.apiKey, val);
+  document.getElementById('api-banner').classList.add('hidden');
+  showToast('API-Schlüssel gespeichert ✓');
+}
+
+function getApiKey() {
+  return localStorage.getItem(STORAGE_KEYS.apiKey) || '';
+}
+
+// ── NAVIGATION ──
+function showPanel(name, btn) {
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('panel-' + name).classList.add('active');
+  if (btn) btn.classList.add('active');
+}
+
+// ── CHAT ──
+function addWelcomeMessage() {
+  const today = new Date().toLocaleDateString('de-DE', {weekday:'long', day:'numeric', month:'long'});
+  const welcome = `Hallo Ramona! ☕ Schön, dass du wieder da bist!\n\nEs ist ${today} — womit kann ich dir heute helfen?\n\nIch bin für alles da: E-Mails schreiben, Arbeitspläne erstellen, Content-Ideen für deine Bücher und Tools, oder einfach nur strukturieren, was heute ansteht. Sag einfach los! 😊`;
+  renderMsg('sandy', welcome);
+}
+
+function loadChatHistory() {
+  try {
+    const saved = localStorage.getItem(STORAGE_KEYS.chatHistory);
+    if (saved) {
+      chatHistory = JSON.parse(saved);
+      chatHistory.forEach(m => renderMsg(m.role === 'assistant' ? 'sandy' : 'user', m.content, true));
+    }
+  } catch(e) { chatHistory = []; }
+}
+
+function saveChatHistory() {
+  try {
+    const toSave = chatHistory.slice(-60);
+    localStorage.setItem(STORAGE_KEYS.chatHistory, JSON.stringify(toSave));
+  } catch(e) {}
+}
+
+function renderMsg(role, text, isHistory = false) {
+  const area = document.getElementById('chat-messages');
+  const div = document.createElement('div');
+  div.className = 'msg ' + role;
+  const initials = role === 'sandy' ? 'S' : 'R';
+  const time = new Date().toLocaleTimeString('de-DE', {hour:'2-digit', minute:'2-digit'});
+  div.innerHTML = `
+    <div class="msg-av ${role}">${initials}</div>
+    <div class="msg-content">
+      <div class="msg-bubble">${escapeHtml(text)}</div>
+      ${!isHistory ? `<div class="msg-time">${time}</div>` : ''}
+    </div>`;
+  area.appendChild(div);
+  area.scrollTop = area.scrollHeight;
+}
+
+function escapeHtml(str) {
+  return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>');
+}
+
+function showTyping() {
+  const area = document.getElementById('chat-messages');
+  const div = document.createElement('div');
+  div.className = 'msg sandy'; div.id = 'typing';
+  div.innerHTML = `<div class="msg-av sandy">S</div><div class="msg-content"><div class="typing-indicator"><div class="typing-dot"></div><div class="typing-dot"></div><div class="typing-dot"></div></div></div>`;
+  area.appendChild(div);
+  area.scrollTop = area.scrollHeight;
+}
+
+function removeTyping() {
+  const el = document.getElementById('typing');
+  if (el) el.remove();
+}
+
+async function callSandy(userMsg, imageBase64 = null, imageType = null) {
+  const key = getApiKey();
+  if (!key) { document.getElementById('api-banner').classList.remove('hidden'); return; }
+
+  const customCtx = localStorage.getItem(STORAGE_KEYS.context) || '';
+  const memory    = localStorage.getItem('sandy_memory') || '';
+  let systemPrompt = SANDY_SYSTEM;
+  if (memory)    systemPrompt += `\n\nWAS SANDY SICH GEMERKT HAT (nie wieder nachfragen!):\n${memory}`;
+  if (customCtx) systemPrompt += `\n\nZUSATZ-KONTEXT VON RAMONA:\n${customCtx}`;
+
+  // Bisherige History als API-Messages (nur Text, max 18 Nachrichten)
+  const prevMessages = chatHistory.slice(-18).map(m => ({ role: m.role, content: m.content }));
+
+  // Aktuelle Nachricht — mit oder ohne Bild
+  const currentMessage = {
+    role: 'user',
+    content: (imageBase64 && imageType)
+      ? [
+          { type: 'image', source: { type: 'base64', media_type: imageType, data: imageBase64 } },
+          { type: 'text',  text: userMsg || 'Was siehst du auf diesem Bild? Analysiere es für mein Business.' }
+        ]
+      : userMsg
+  };
+
+  const apiMessages = [...prevMessages, currentMessage];
+
+  // Erst in History speichern NACH dem Zusammenbauen der apiMessages
+  chatHistory.push({ role: 'user', content: userMsg });
+  saveChatHistory();
+  showTyping();
+
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': key,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true'
+      },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-6',
+        max_tokens: 2000,
+        system: systemPrompt,
+        messages: apiMessages
+      })
+    });
+
+    const data = await res.json();
+    removeTyping();
+
+    if (data.error) {
+      renderMsg('sandy', '⚠️ Fehler: ' + (data.error.message || 'Unbekannter Fehler. Bitte API-Schlüssel prüfen.'));
+      return;
+    }
+
+    const reply = data.content?.[0]?.text || 'Entschuldigung, ich hatte ein Problem. Bitte versuche es nochmal!';
+    chatHistory.push({ role: 'assistant', content: reply });
+    saveChatHistory();
+    renderMsg('sandy', reply);
+    if (voiceEnabled) speakText(reply);
+  } catch(e) {
+    removeTyping();
+    renderMsg('sandy', '⚠️ Verbindungsfehler. Bitte prüfe deine Internetverbindung und den API-Schlüssel.');
+  }
+}
+
+async function sendMsg() {
+  const ta = document.getElementById('chat-input');
+  const text = ta.value.trim();
+  const hasImage = currentImageBase64 !== null;
+
+  if (!text && !hasImage) return;
+
+  const msgText = text || '🖼️ Bild hochgeladen';
+  ta.value = ''; ta.style.height = 'auto';
+
+  // Bild in Chat anzeigen
+  if (hasImage) {
+    const imgSrc = document.getElementById('img-preview').src;
+    const area = document.getElementById('chat-messages');
+    const div = document.createElement('div');
+    div.className = 'msg user';
+    const time = new Date().toLocaleTimeString('de-DE', {hour:'2-digit', minute:'2-digit'});
+    div.innerHTML = `<div class="msg-av user">R</div><div class="msg-content">
+      <img src="${imgSrc}" style="max-width:200px; max-height:150px; border-radius:8px; border:1px solid var(--border); margin-bottom:4px; display:block;" />
+      ${text ? `<div class="msg-bubble">${escapeHtml(text)}</div>` : ''}
+      <div class="msg-time">${time}</div>
+    </div>`;
+    area.appendChild(div);
+    area.scrollTop = area.scrollHeight;
+  } else {
+    renderMsg('user', text);
+  }
+
+  const imgBase64 = currentImageBase64;
+  const imgType   = currentImageType;
+  removeImage(); // Bild nach dem Senden entfernen
+
+  await callSandy(msgText, imgBase64, imgType);
+}
+
+async function quickSend(text) {
+  showPanel('chat', document.querySelector('.nav-btn.active') || document.querySelector('.nav-btn'));
+  document.querySelector('.nav-btn').classList.add('active');
+  document.querySelectorAll('.nav-btn').forEach((b,i) => { if(i===0) b.classList.add('active'); else b.classList.remove('active'); });
+  renderMsg('user', text);
+  await callSandy(text);
+}
+
+function handleKey(e) {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMsg(); }
+}
+
+function autoGrow(el) {
+  el.style.height = 'auto';
+  el.style.height = Math.min(el.scrollHeight, 120) + 'px';
+}
+
+function clearChat() {
+  if (!confirm('Chat-Verlauf löschen?')) return;
+  clearChatHistory();
+}
+
+function clearChatHistory() {
+  chatHistory = [];
+  localStorage.removeItem(STORAGE_KEYS.chatHistory);
+  document.getElementById('chat-messages').innerHTML = '';
+  addWelcomeMessage();
+}
+
+// ── EMAIL ──
+function selectEmailType(card, type) {
+  document.querySelectorAll('.type-card').forEach(c => c.classList.remove('selected'));
+  card.classList.add('selected');
+  selectedEmailType = type;
+}
+
+async function generateEmail() {
+  const details = document.getElementById('email-details').value.trim();
+  const tone = document.getElementById('email-tone').value;
+  if (!details && !selectedEmailType) { alert('Bitte Details eingeben!'); return; }
+
+  const prompt = `Schreibe eine vollständige ${selectedEmailType || 'geschäftliche'} E-Mail.\n\nTon: ${tone}\nDetails: ${details}\n\nFormat:\n- Betreff: ...\n- Anrede\n- E-Mail-Text\n- Grußformel\n- Absenderin: Ramona Junggebauer\n\nSchreibe die E-Mail vollständig und direkt verwendbar.`;
+
+  showPanel('chat', null);
+  document.querySelectorAll('.nav-btn').forEach((b,i) => { if(i===0) b.classList.add('active'); else b.classList.remove('active'); });
+  renderMsg('user', `E-Mail schreiben: ${selectedEmailType || 'Allgemein'}`);
+  await callSandy(prompt);
+}
+
+// ── PLAN ──
+async function generatePlan() {
+  const period = document.getElementById('plan-period').value;
+  const focus = document.getElementById('plan-focus').value.trim();
+  const hours = document.getElementById('plan-hours').value;
+
+  const prompt = `Erstelle einen detaillierten Arbeitsplan für ${period}.\n\nVerfügbare Zeit: ${hours} täglich\nSchwerpunkte: ${focus || 'Alle aktuellen Projekte (Bücher, Tools, Affiliate, Krypto, TafelGold)'}\n\nStrukturiere den Plan klar und realistisch. Teile die Projekte sinnvoll auf und priorisiere. Gib konkrete Zeitblöcke an.`;
+
+  showPanel('chat', null);
+  document.querySelectorAll('.nav-btn').forEach((b,i) => { if(i===0) b.classList.add('active'); else b.classList.remove('active'); });
+  renderMsg('user', `Arbeitsplan für ${period} erstellen`);
+  await callSandy(prompt);
+}
+
+// ── NOTES ──
+function loadNotes() {
+  const saved = localStorage.getItem(STORAGE_KEYS.notes) || '';
+  const el = document.getElementById('notes-area');
+  if (el) el.value = saved;
+}
+
+function saveNotes() {
+  clearTimeout(saveNotesTimer);
+  saveNotesTimer = setTimeout(() => {
+    const val = document.getElementById('notes-area').value;
+    localStorage.setItem(STORAGE_KEYS.notes, val);
+    const ind = document.getElementById('save-indicator');
+    if (ind) { ind.textContent = '✓ Gespeichert'; setTimeout(() => ind.textContent = '', 2000); }
+  }, 800);
+}
+
+function addNoteTemplate(tpl) {
+  const ta = document.getElementById('notes-area');
+  ta.value += (ta.value ? '\n\n' : '') + tpl;
+  ta.focus();
+  saveNotes();
+}
+
+function clearNotes() {
+  if (!confirm('Alle Notizen löschen?')) return;
+  localStorage.removeItem(STORAGE_KEYS.notes);
+  document.getElementById('notes-area').value = '';
+  showToast('Notizen gelöscht');
+}
+
+// ── CONTEXT ──
+function loadContext() {
+  const saved = localStorage.getItem(STORAGE_KEYS.context) || '';
+  const el = document.getElementById('custom-context');
+  if (el) el.value = saved;
+}
+
+function saveContext() {
+  const val = document.getElementById('custom-context').value;
+  localStorage.setItem(STORAGE_KEYS.context, val);
+  showToast('Kontext gespeichert ✓');
+}
+
+function clearAll() {
+  if (!confirm('Wirklich alles löschen (Chat, Notizen, Kontext)?')) return;
+  Object.values(STORAGE_KEYS).forEach(k => { if(k !== STORAGE_KEYS.apiKey) localStorage.removeItem(k); });
+  chatHistory = [];
+  document.getElementById('chat-messages').innerHTML = '';
+  document.getElementById('notes-area').value = '';
+  document.getElementById('custom-context').value = '';
+  addWelcomeMessage();
+  showToast('Alles gelöscht');
+}
+
+// ── KALENDER ──
+function createCalLink() {
+  const title = document.getElementById('cal-title').value.trim();
+  const date  = document.getElementById('cal-date').value;
+  const start = document.getElementById('cal-start').value;
+  const end   = document.getElementById('cal-end').value;
+  const desc  = document.getElementById('cal-desc').value.trim();
+  const rep   = document.getElementById('cal-repeat').value;
+
+  if (!title) { alert('Bitte einen Termin-Titel eingeben!'); return; }
+  if (!date)  { alert('Bitte ein Datum auswählen!'); return; }
+
+  const link = buildGCalLink(title, date, start, end, desc, rep);
+  const fmt = new Date(date).toLocaleDateString('de-DE', {weekday:'long', day:'numeric', month:'long'});
+
+  document.getElementById('cal-summary').textContent =
+    `${title} · ${fmt} · ${start}–${end} Uhr`;
+  document.getElementById('cal-link').href = link;
+  document.getElementById('cal-result').style.display = 'block';
+  document.getElementById('cal-result').scrollIntoView({behavior:'smooth', block:'nearest'});
+}
+
+function buildGCalLink(title, date, startTime, endTime, desc, recur) {
+  const fmt = (d, t) => {
+    const [y,m,day] = d.split('-');
+    const [h,min] = t.split(':');
+    return `${y}${m}${day}T${h}${min}00`;
+  };
+  const params = new URLSearchParams({
+    action: 'TEMPLATE',
+    text: title,
+    dates: `${fmt(date,startTime)}/${fmt(date,endTime)}`,
+    details: desc || '',
+    location: ''
+  });
+  if (recur) params.set('recur', `RRULE:FREQ=${recur}`);
+  return `https://calendar.google.com/calendar/render?${params.toString()}`;
+}
+
+function prefillCal(title, start, end, desc) {
+  document.getElementById('cal-title').value = title;
+  document.getElementById('cal-start').value = start;
+  document.getElementById('cal-end').value   = end;
+  document.getElementById('cal-desc').value  = desc;
+  // Set today as default date if empty
+  if (!document.getElementById('cal-date').value) {
+    document.getElementById('cal-date').value = new Date().toISOString().split('T')[0];
+  }
+  document.getElementById('cal-result').style.display = 'none';
+  document.getElementById('cal-title').focus();
+}
+
+function copyCalLink() {
+  const link = document.getElementById('cal-link').href;
+  navigator.clipboard.writeText(link).then(() => showToast('Link kopiert ✓'));
+}
+
+async function parseCalFromChat() {
+  const input = document.getElementById('cal-chat-input').value.trim();
+  if (!input) return;
+  const key = getApiKey();
+  if (!key) { document.getElementById('api-banner').classList.remove('hidden'); return; }
+
+  const resultBox = document.getElementById('cal-chat-result');
+  resultBox.style.display = 'block';
+  resultBox.innerHTML = '<div style="color:var(--text-muted); font-size:13px;">Sandy denkt nach...</div>';
+
+  const today = new Date().toISOString().split('T')[0];
+
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': key,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true'
+      },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-6',
+        max_tokens: 300,
+        system: `Du extrahierst Termindaten aus natürlichsprachigen Texten und gibst NUR ein JSON-Objekt zurück, kein Markdown, keine Erklärung.
+Heute ist ${today}.
+Format: {"title":"...","date":"YYYY-MM-DD","start":"HH:MM","end":"HH:MM","desc":"..."}
+Regeln:
+- "morgen" = heute + 1 Tag
+- "übermorgen" = heute + 2 Tage
+- Wochentage = nächstes Vorkommen
+- Dauer: wenn keine Endzeit, nimm 1h nach Start
+- desc: kurze Beschreibung was gemacht wird`,
+        messages: [{ role: 'user', content: input }]
+      })
+    });
+    const data = await res.json();
+    const raw = data.content?.[0]?.text || '';
+    let parsed;
+    try { parsed = JSON.parse(raw.replace(/```json|```/g,'').trim()); } catch(e) {
+      resultBox.innerHTML = '<div style="color:#A32D2D; font-size:13px;">Sandy konnte den Termin nicht erkennen. Bitte direkt eingeben.</div>';
+      return;
+    }
+    // Fill form fields
+    if (parsed.title) document.getElementById('cal-title').value = parsed.title;
+    if (parsed.date)  document.getElementById('cal-date').value  = parsed.date;
+    if (parsed.start) document.getElementById('cal-start').value = parsed.start;
+    if (parsed.end)   document.getElementById('cal-end').value   = parsed.end;
+    if (parsed.desc)  document.getElementById('cal-desc').value  = parsed.desc;
+
+    const fmt = parsed.date ? new Date(parsed.date).toLocaleDateString('de-DE',{weekday:'long',day:'numeric',month:'long'}) : '';
+    resultBox.innerHTML = `<div style="background:var(--purple-50);border:1px solid var(--purple-200);border-radius:var(--radius-sm);padding:10px 14px;font-size:13px;color:var(--purple-900);">
+      ✓ Sandy hat erkannt: <strong>${parsed.title}</strong> · ${fmt} · ${parsed.start}–${parsed.end} Uhr<br>
+      <span style="color:var(--text-muted);">Felder oben wurden ausgefüllt — jetzt auf "Link erstellen" klicken!</span>
+    </div>`;
+    document.getElementById('cal-chat-input').value = '';
+  } catch(e) {
+    resultBox.innerHTML = '<div style="color:#A32D2D; font-size:13px;">Verbindungsfehler. Bitte nochmal versuchen.</div>';
+  }
+}
+
+// ── MP3 / ELEVENLABS ──
+function saveElKey() {
+  const val = document.getElementById('el-api-key').value.trim();
+  if (!val) { alert('Bitte ElevenLabs API-Key eingeben!'); return; }
+  localStorage.setItem('sandy_el_key', val);
+  showToast('ElevenLabs Key gespeichert ✓');
+}
+
+function getElKey() {
+  return localStorage.getItem('sandy_el_key') || '';
+}
+
+function clearMp3Text() {
+  document.getElementById('el-text').value = '';
+  document.getElementById('mp3-result').style.display = 'none';
+  document.getElementById('mp3-status').style.display = 'none';
+}
+
+function setMp3Status(msg, type) {
+  const el = document.getElementById('mp3-status');
+  el.style.display = 'block';
+  el.style.background = type === 'error' ? '#FCEBEB' : '#EEEDFE';
+  el.style.border = `1px solid ${type === 'error' ? '#F7C1C1' : '#AFA9EC'}`;
+  el.style.color = type === 'error' ? '#A32D2D' : '#26215C';
+  el.textContent = msg;
+}
+
+async function generateMp3() {
+  const elKey = getElKey();
+  if (!elKey) { alert('Bitte zuerst deinen ElevenLabs API-Key speichern!'); return; }
+
+  const text = document.getElementById('el-text').value.trim();
+  if (!text) { alert('Bitte einen Text eingeben!'); return; }
+
+  const voiceId    = document.getElementById('el-voice').value;
+  const modelId    = document.getElementById('el-model').value;
+  const stability  = parseInt(document.getElementById('el-stability').value) / 100;
+  const similarity = parseInt(document.getElementById('el-similarity').value) / 100;
+  const style      = parseInt(document.getElementById('el-style').value) / 100;
+
+  setMp3Status('⏳ ElevenLabs generiert deine MP3...', 'info');
+  document.getElementById('mp3-result').style.display = 'none';
+
+  try {
+    const res = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`, {
+      method: 'POST',
+      headers: {
+        'xi-api-key': elKey,
+        'Content-Type': 'application/json',
+        'Accept': 'audio/mpeg'
+      },
+      body: JSON.stringify({
+        text,
+        model_id: modelId,
+        voice_settings: { stability, similarity_boost: similarity, style, use_speaker_boost: true }
+      })
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      setMp3Status('❌ Fehler: ' + (err.detail?.message || err.detail || 'API-Fehler. Key prüfen!'), 'error');
+      return;
+    }
+
+    const blob = await res.blob();
+    const url  = URL.createObjectURL(blob);
+    const filename = `sandy-audio-${Date.now()}.mp3`;
+
+    document.getElementById('mp3-player').src = url;
+    document.getElementById('mp3-download').href = url;
+    document.getElementById('mp3-download').download = filename;
+    document.getElementById('mp3-result').style.display = 'block';
+    document.getElementById('mp3-status').style.display = 'none';
+    document.getElementById('mp3-result').scrollIntoView({behavior:'smooth', block:'nearest'});
+  } catch(e) {
+    setMp3Status('❌ Verbindungsfehler. Internetverbindung und API-Key prüfen.', 'error');
+  }
+}
+
+async function sandyWriteText() {
+  const anthKey = getApiKey();
+  if (!anthKey) { document.getElementById('api-banner').classList.remove('hidden'); return; }
+  const currentText = document.getElementById('el-text').value.trim();
+  const prompt = currentText
+    ? `Verbessere und optimiere diesen Text für eine natürliche Sprachausgabe (TTS). Mache ihn flüssiger, entferne Sonderzeichen die nicht vorgelesen werden sollen, und passe die Satzlänge an:\n\n${currentText}`
+    : 'Schreibe einen kurzen, fließenden Audio-Text (ca. 100-150 Wörter) für Ramona Junggebauers Business. Wähle selbst ein passendes Thema aus: Zwergenbibliothek, TestNavigator, K17 oder TafelGold. Ton: warm und professionell. Nur den reinen Sprechtext, ohne Anführungszeichen oder Anmerkungen.';
+
+  setMp3Status('✨ Sandy schreibt den Text...', 'info');
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-api-key': anthKey, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
+      body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 500, system: 'Du bist Sandy, KI-Assistentin von Ramona Junggebauer. Gib NUR den fertigen Sprechtext zurück, keine Erklärungen, keine Anführungszeichen drumrum.', messages: [{ role: 'user', content: prompt }] })
+    });
+    const data = await res.json();
+    const txt = data.content?.[0]?.text || '';
+    document.getElementById('el-text').value = txt;
+    document.getElementById('mp3-status').style.display = 'none';
+    showToast('Text von Sandy geschrieben ✓');
+  } catch(e) {
+    setMp3Status('❌ Fehler beim Text generieren.', 'error');
+  }
+}
+
+async function sandyWriteSpecific(prompt) {
+  const anthKey = getApiKey();
+  if (!anthKey) { document.getElementById('api-banner').classList.remove('hidden'); return; }
+  showPanel('mp3', null);
+  document.querySelectorAll('.nav-btn').forEach(b => {
+    if (b.textContent.includes('MP3')) b.classList.add('active');
+    else b.classList.remove('active');
+  });
+  setMp3Status('✨ Sandy schreibt den Text...', 'info');
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-api-key': anthKey, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
+      body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 600, system: 'Du bist Sandy, KI-Assistentin von Ramona Junggebauer. Gib NUR den fertigen Sprechtext zurück, fließend und natürlich klingend. Keine Erklärungen, keine Anführungszeichen, keine Überschriften.', messages: [{ role: 'user', content: prompt }] })
+    });
+    const data = await res.json();
+    const txt = data.content?.[0]?.text || '';
+    document.getElementById('el-text').value = txt;
+    document.getElementById('mp3-status').style.display = 'none';
+    showToast('Text bereit — jetzt MP3 erstellen! ✓');
+  } catch(e) {
+    setMp3Status('❌ Fehler beim Text generieren.', 'error');
+  }
+}
+
+function loadElKey() {
+  const k = localStorage.getItem('sandy_el_key');
+  if (k) { const el = document.getElementById('el-api-key'); if(el) el.value = k; }
+}
+
+// ── BILD UPLOAD ──
+let currentImageBase64 = null;
+let currentImageType = null;
+
+function handleImageUpload(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  if (!file.type.startsWith('image/')) { alert('Bitte nur Bilder hochladen!'); return; }
+  if (file.size > 5 * 1024 * 1024) { alert('Bild zu groß! Bitte unter 5MB.'); return; }
+
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    const base64 = e.target.result.split(',')[1];
+    currentImageBase64 = base64;
+    currentImageType = file.type;
+    document.getElementById('img-preview').src = e.target.result;
+    document.getElementById('img-preview-box').style.display = 'block';
+  };
+  reader.readAsDataURL(file);
+  // Input zurücksetzen damit gleiche Datei nochmal gewählt werden kann
+  event.target.value = '';
+}
+
+function removeImage() {
+  currentImageBase64 = null;
+  currentImageType = null;
+  document.getElementById('img-preview-box').style.display = 'none';
+  document.getElementById('img-preview').src = '';
+}
+
+// ── MIKROFON (Web Speech API) ──
+let recognition = null;
+let isListening = false;
+
+function toggleMic() {
+  if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+    alert('Dein Browser unterstützt kein Mikrofon. Bitte Chrome oder Safari verwenden.');
+    return;
+  }
+  isListening ? stopMic() : startMic();
+}
+
+function startMic() {
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  recognition = new SR();
+  recognition.lang = 'de-DE';
+  recognition.continuous = false;
+  recognition.interimResults = false;
+
+  recognition.onstart = () => {
+    isListening = true;
+    document.getElementById('mic-btn').style.background = '#FCEBEB';
+    document.getElementById('mic-btn').style.borderColor = '#E24B4A';
+    document.getElementById('mic-btn').style.color = '#E24B4A';
+    document.getElementById('mic-label').textContent = 'Aufnahme stoppen';
+    document.getElementById('mic-status').style.display = 'inline';
+  };
+
+  recognition.onresult = async (e) => {
+    const transcript = e.results[0][0].transcript.trim();
+    if (transcript) {
+      document.getElementById('chat-input').value = transcript;
+      stopMic();
+      // Automatisch absenden
+      renderMsg('user', transcript);
+      document.getElementById('chat-input').value = '';
+      await callSandy(transcript);
+    }
+  };
+
+  recognition.onerror = () => stopMic();
+  recognition.onend   = () => stopMic();
+  recognition.start();
+}
+
+function stopMic() {
+  isListening = false;
+  if (recognition) { try { recognition.stop(); } catch(e){} recognition = null; }
+  const btn = document.getElementById('mic-btn');
+  btn.style.background = '';
+  btn.style.borderColor = '';
+  btn.style.color = '';
+  document.getElementById('mic-label').textContent = 'Sprechen';
+  document.getElementById('mic-status').style.display = 'none';
+}
+
+// ── SPRACHAUSGABE (Web Speech Synthesis) ──
+let voiceEnabled = false;
+let currentUtterance = null;
+
+function toggleVoice() {
+  voiceEnabled = !voiceEnabled;
+  const btn   = document.getElementById('voice-btn');
+  const label = document.getElementById('voice-label');
+  if (voiceEnabled) {
+    btn.style.background = '#E1F5EE';
+    btn.style.borderColor = '#9FE1CB';
+    btn.style.color = '#0F6E56';
+    label.textContent = 'Stimme: An';
+    // Sofort Teston abspielen damit Chrome entsperrt
+    testVoice();
+  } else {
+    btn.style.background = '';
+    btn.style.borderColor = '';
+    btn.style.color = '';
+    label.textContent = 'Stimme: Aus';
+    window.speechSynthesis.cancel();
+  }
+}
+
+function testVoice() {
+  window.speechSynthesis.cancel();
+  const utt = new SpeechSynthesisUtterance('Hallo Ramona, ich bin bereit!');
+  utt.lang = 'de-DE';
+  utt.rate = 1.05;
+  utt.pitch = 1.1;
+  utt.volume = 1;
+  const voices = window.speechSynthesis.getVoices();
+  const deVoice = voices.find(v => v.lang.startsWith('de') && v.localService) ||
+                  voices.find(v => v.lang.startsWith('de')) ||
+                  voices.find(v => v.lang.startsWith('en')) || null;
+  if (deVoice) utt.voice = deVoice;
+  utt.onstart = () => document.getElementById('voice-status').style.display = 'inline';
+  utt.onend   = () => document.getElementById('voice-status').style.display = 'none';
+  utt.onerror = (e) => {
+    document.getElementById('voice-status').style.display = 'none';
+    console.log('Voice error:', e);
+  };
+  window.speechSynthesis.speak(utt);
+}
+
+function speakText(text) {
+  if (!voiceEnabled) return;
+  window.speechSynthesis.cancel();
+  setTimeout(() => {
+    // Emojis, Markdown und Sonderzeichen entfernen
+    const speakable = text
+      .replace(/[\u{1F000}-\u{1FFFF}]/gu, '')  // Emojis entfernen
+      .replace(/[\u2600-\u27FF]/gu, '')          // weitere Symbole
+      .replace(/[#*_`[\]>]/g, '')                // Markdown
+      .replace(/\n+/g, ' ')                      // Zeilenumbrüche
+      .replace(/\s+/g, ' ')                      // mehrere Leerzeichen
+      .trim()
+      .substring(0, 400);
+    if (!speakable) return;
+    const utt = new SpeechSynthesisUtterance(speakable);
+    utt.lang = 'de-DE';
+    utt.rate = 1.05;
+    utt.pitch = 1.1;
+    utt.volume = 1;
+    const voices = window.speechSynthesis.getVoices();
+    const deVoice = voices.find(v => v.lang.startsWith('de') && v.localService) ||
+                    voices.find(v => v.lang.startsWith('de')) ||
+                    voices.find(v => v.lang.startsWith('en')) || null;
+    if (deVoice) utt.voice = deVoice;
+    utt.onstart = () => document.getElementById('voice-status').style.display = 'inline';
+    utt.onend   = () => document.getElementById('voice-status').style.display = 'none';
+    utt.onerror = () => document.getElementById('voice-status').style.display = 'none';
+    currentUtterance = utt;
+    window.speechSynthesis.speak(utt);
+  }, 300);
+}
+
+// ── GEDÄCHTNIS / ZUSAMMENFASSUNG ──
+async function summarizeChat() {
+  const key = getApiKey();
+  if (!key) { document.getElementById('api-banner').classList.remove('hidden'); return; }
+  if (chatHistory.length < 2) { showToast('Noch zu wenig Gesprächsinhalt zum Merken.'); return; }
+
+  showToast('🧠 Sandy fasst zusammen...');
+
+  const summaryPrompt = `Fasse dieses Gespräch in maximal 5 kurzen Stichpunkten zusammen. 
+Fokus: Was wurde entschieden? Welche Aufgaben wurden vereinbart? Welche wichtigen Infos wurden genannt?
+Schreibe NUR die Stichpunkte, keine Einleitung. Format: "- ..."`;
+
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type':'application/json', 'x-api-key':key, 'anthropic-version':'2023-06-01', 'anthropic-dangerous-direct-browser-access':'true' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-6',
+        max_tokens: 400,
+        system: 'Du bist Sandy. Fasse Gespräche präzise zusammen.',
+        messages: [...chatHistory.slice(-20), { role:'user', content: summaryPrompt }]
+      })
+    });
+    const data = await res.json();
+    const summary = data.content?.[0]?.text || '';
+    if (!summary) { showToast('Zusammenfassung fehlgeschlagen.'); return; }
+
+    // Bestehende Memory erweitern
+    const existing = localStorage.getItem('sandy_memory') || '';
+    const date = new Date().toLocaleDateString('de-DE', {day:'numeric', month:'short', hour:'2-digit', minute:'2-digit'});
+    const newMemory = (existing ? existing + '\n\n' : '') + `[${date}]:\n${summary}`;
+    localStorage.setItem('sandy_memory', newMemory);
+
+    // Anzeigen
+    document.getElementById('memory-text').textContent = summary.substring(0, 120) + (summary.length > 120 ? '...' : '');
+    document.getElementById('memory-box').style.display = 'block';
+    showToast('🧠 Sandy hat es sich gemerkt ✓');
+  } catch(e) {
+    showToast('Fehler beim Zusammenfassen.');
+  }
+}
+
+function clearMemory() {
+  if (!confirm('Gespeichertes Gedächtnis löschen?')) return;
+  localStorage.removeItem('sandy_memory');
+  document.getElementById('memory-box').style.display = 'none';
+  showToast('Gedächtnis gelöscht');
+}
+
+function loadMemory() {
+  const m = localStorage.getItem('sandy_memory');
+  if (m) {
+    document.getElementById('memory-text').textContent = m.substring(0, 120) + (m.length > 120 ? '...' : '');
+    document.getElementById('memory-box').style.display = 'block';
+  }
+}
+
+// ── TOAST ──
+function showToast(msg) {
+  const t = document.createElement('div');
+  t.style.cssText = 'position:fixed;bottom:24px;right:24px;background:#534AB7;color:white;padding:10px 18px;border-radius:8px;font-size:14px;z-index:9999;box-shadow:0 4px 12px rgba(0,0,0,0.15);';
+  t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(() => t.remove(), 2500);
+}
+
+// ── START ──
+init();
+</script>
+</body>
+</html>
