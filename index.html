@@ -390,6 +390,9 @@
           <button onclick="document.getElementById('img-upload').click()" title="Bild oder Screenshot hochladen" style="display:flex; align-items:center; gap:6px; padding:7px 14px; border-radius:var(--radius-pill); border:1px solid var(--border); background:var(--surface); color:var(--text-muted); font-size:13px; cursor:pointer; transition:all 0.15s;">
             🖼️ Bild
           </button>
+          <button onclick="searchWeb()" title="Im Internet recherchieren" style="display:flex; align-items:center; gap:6px; padding:7px 14px; border-radius:var(--radius-pill); border:1px solid var(--border); background:var(--surface); color:var(--text-muted); font-size:13px; cursor:pointer; transition:all 0.15s;">
+            🔍 Recherche
+          </button>
           <input type="file" id="img-upload" accept="image/*" style="display:none;" onchange="handleImageUpload(event)" />
           <div id="mic-status" style="font-size:12px; color:var(--teal-400); display:none;">● Aufnahme läuft...</div>
           <div id="voice-status" style="font-size:12px; color:var(--purple-500); display:none;">▶ Sandy spricht...</div>
@@ -825,7 +828,13 @@
 
         <label class="form-label">Anthropic API-Schlüssel</label>
         <input type="password" class="form-input" id="settings-api-key" placeholder="sk-ant-api03-..." />
-        <button class="primary-btn" onclick="saveApiKeyFromSettings()" style="margin-bottom:20px;">Speichern</button>
+
+        <label class="form-label">Tavily API-Key (für Internet-Recherche)</label>
+        <div style="display:flex; gap:8px; margin-bottom:16px;">
+          <input type="password" class="form-input" id="tavily-key-input" placeholder="tvly-..." style="margin:0; flex:1;" />
+        </div>
+        <button class="primary-btn" onclick="saveApiKeyFromSettings()" style="margin-bottom:20px;">Alle Keys speichern</button>
+        <div style="font-size:12px; color:var(--text-muted); margin-top:-16px; margin-bottom:20px;">Tavily kostenlos auf tavily.com — 1.000 Suchen/Monat gratis</div>
 
         <hr style="border:none; border-top:1px solid var(--border); margin-bottom:20px;">
 
@@ -869,10 +878,16 @@ DEINE PERSÖNLICHKEIT & REGELN:
 - Du kennst ihr Business in- und auswendig und denkst voraus
 - Redet Ramona mit "du" an, bleibt aber professionell
 - Organisiert, strukturiert, lösungsorientiert und motivierend
-- Wenn jemand Kaffee erwähnt: antworte mit einer kurzen, witzigen Kaffee-Anmerkung ☕
+- Wenn jemand Kaffee erwähnt: antworte mit einer kurzen, witzigen Kaffee-Anmerkung
 - Schreibst auf Deutsch, präzise, ohne Füllwörter
-- Verwende Formatierung (Listen, Absätze, Emojis) wenn es die Lesbarkeit verbessert
+- Verwende Formatierung (Listen, Absätze) wenn es die Lesbarkeit verbessert
 - Bei E-Mails: immer vollständige E-Mail mit Betreff, Anrede, Text und Grußformel
+
+WICHTIG - EHRLICHKEIT BEI RECHERCHE:
+- Du hast KEIN Internetzugang aus dir selbst heraus
+- Wenn Recherche-Ergebnisse im Gespräch vorhanden sind (markiert mit [RECHERCHE:]), nutze diese
+- Wenn keine Recherche-Ergebnisse vorhanden sind und jemand aktuelle Infos braucht, sage klar: "Dafür brauche ich die Recherche-Funktion — klick auf den Suchen-Button"
+- Erfinde NIEMALS aktuelle Preise, News oder Fakten
 
 FÄHIGKEITEN:
 - Vollständige E-Mails schreiben (Kooperationen, Kunden, Newsletter, Sales, Follow-ups)
@@ -881,7 +896,8 @@ FÄHIGKEITEN:
 - Buchideen, Kapitelstruktur, Texte und Skripte
 - Business-Analysen und strategische Handlungsempfehlungen
 - Terminplanung und Erinnerungen
-- Motivation und Tagesstruktur`;
+- Motivation und Tagesstruktur
+- Internet-Recherche (wenn Tavily API-Key vorhanden)`;
 
 const STORAGE_KEYS = {
   apiKey: 'sandy_api_key',
@@ -904,6 +920,7 @@ function init() {
   loadContext();
   loadElKey();
   loadMemory();
+  loadTavilyKey();
   // Stimmen vorladen (Chrome braucht onvoiceschanged)
   if (window.speechSynthesis.onvoiceschanged !== undefined) {
     window.speechSynthesis.onvoiceschanged = () => window.speechSynthesis.getVoices();
@@ -939,10 +956,13 @@ function saveApiKey() {
 
 function saveApiKeyFromSettings() {
   const val = document.getElementById('settings-api-key').value.trim();
-  if (!val) { alert('Bitte einen API-Schlüssel eingeben'); return; }
-  localStorage.setItem(STORAGE_KEYS.apiKey, val);
-  document.getElementById('api-banner').classList.add('hidden');
-  showToast('API-Schlüssel gespeichert ✓');
+  const tavily = document.getElementById('tavily-key-input').value.trim();
+  if (val) {
+    localStorage.setItem(STORAGE_KEYS.apiKey, val);
+    document.getElementById('api-banner').classList.add('hidden');
+  }
+  if (tavily) localStorage.setItem('sandy_tavily_key', tavily);
+  showToast('Keys gespeichert ✓');
 }
 
 function getApiKey() {
@@ -1704,6 +1724,83 @@ function loadMemory() {
   if (m) {
     document.getElementById('memory-text').textContent = m.substring(0, 120) + (m.length > 120 ? '...' : '');
     document.getElementById('memory-box').style.display = 'block';
+  }
+}
+
+// ── TAVILY RECHERCHE ──
+function getTavilyKey() {
+  return localStorage.getItem('sandy_tavily_key') || '';
+}
+
+function loadTavilyKey() {
+  const k = localStorage.getItem('sandy_tavily_key');
+  if (k) {
+    const el = document.getElementById('tavily-key-input');
+    if (el) el.value = k;
+  }
+}
+
+async function searchWeb() {
+  const tavilyKey = getTavilyKey();
+  if (!tavilyKey) {
+    renderMsg('sandy', 'Für die Internet-Recherche brauche ich deinen Tavily API-Key. Geh zu Einstellungen und trag ihn ein. Kostenlos auf tavily.com — 1.000 Suchen pro Monat!');
+    return;
+  }
+
+  const input = document.getElementById('chat-input').value.trim();
+  if (!input) {
+    // Zeige Eingabe-Dialog
+    const query = prompt('Was soll ich recherchieren?');
+    if (!query) return;
+    document.getElementById('chat-input').value = query;
+  }
+
+  const query = document.getElementById('chat-input').value.trim();
+  document.getElementById('chat-input').value = '';
+
+  renderMsg('user', '🔍 Recherche: ' + query);
+  showTyping();
+
+  try {
+    const res = await fetch('https://api.tavily.com/search', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        api_key: tavilyKey,
+        query: query,
+        search_depth: 'basic',
+        max_results: 5,
+        include_answer: true,
+        include_raw_content: false
+      })
+    });
+
+    const data = await res.json();
+    removeTyping();
+
+    if (data.error) {
+      renderMsg('sandy', '❌ Recherche-Fehler: ' + data.error + ' — Bitte Tavily API-Key prüfen.');
+      return;
+    }
+
+    // Ergebnisse aufbereiten
+    let searchContext = `[RECHERCHE: "${query}"]\n\n`;
+    if (data.answer) searchContext += `Zusammenfassung: ${data.answer}\n\n`;
+    if (data.results && data.results.length > 0) {
+      searchContext += 'Quellen:\n';
+      data.results.slice(0, 4).forEach((r, i) => {
+        searchContext += `${i+1}. ${r.title}\n${r.content.substring(0, 300)}...\nQuelle: ${r.url}\n\n`;
+      });
+    }
+
+    // Sandy analysiert die Recherche-Ergebnisse
+    const prompt = `${searchContext}\nBitte analysiere diese Recherche-Ergebnisse und beantworte die Frage "${query}" für mich. Fasse die wichtigsten Punkte zusammen und gib praktische Empfehlungen für mein Business.`;
+
+    await callSandy(prompt);
+
+  } catch(e) {
+    removeTyping();
+    renderMsg('sandy', '❌ Verbindungsfehler bei der Recherche. Internetverbindung prüfen.');
   }
 }
 
