@@ -830,11 +830,23 @@
         <input type="password" class="form-input" id="settings-api-key" placeholder="sk-ant-api03-..." />
 
         <label class="form-label">Tavily API-Key (für Internet-Recherche)</label>
-        <div style="display:flex; gap:8px; margin-bottom:16px;">
-          <input type="password" class="form-input" id="tavily-key-input" placeholder="tvly-..." style="margin:0; flex:1;" />
-        </div>
-        <button class="primary-btn" onclick="saveApiKeyFromSettings()" style="margin-bottom:20px;">Alle Keys speichern</button>
-        <div style="font-size:12px; color:var(--text-muted); margin-top:-16px; margin-bottom:20px;">Tavily kostenlos auf tavily.com — 1.000 Suchen/Monat gratis</div>
+        <input type="password" class="form-input" id="tavily-key-input" placeholder="tvly-..." />
+
+        <label class="form-label">Supabase URL (für Sandy's Langzeit-Gedächtnis)</label>
+        <input type="text" class="form-input" id="supabase-url-input" placeholder="https://xxxxxx.supabase.co" />
+
+        <label class="form-label">Supabase API-Key (veröffentlichbarer Schlüssel)</label>
+        <input type="password" class="form-input" id="supabase-key-input" placeholder="sb_veröffentlichbar_..." />
+
+        <button class="primary-btn" onclick="saveApiKeyFromSettings()" style="margin-bottom:8px;">Alle Keys speichern</button>
+        <div style="font-size:12px; color:var(--text-muted); margin-bottom:20px;">Tavily kostenlos auf tavily.com · Supabase kostenlos auf supabase.com</div>
+
+        <hr style="border:none; border-top:1px solid var(--border); margin-bottom:20px;">
+
+        <!-- Supabase Setup Button -->
+        <label class="form-label">Supabase Tabelle einrichten (einmalig)</label>
+        <p style="font-size:13px; color:var(--text-muted); margin-bottom:10px;">Beim ersten Mal muss Sandy's Gedächtnis-Tabelle in Supabase erstellt werden.</p>
+        <button class="primary-btn" onclick="setupSupabase()" style="margin-bottom:20px; background:var(--teal-400);">Supabase einrichten →</button>
 
         <hr style="border:none; border-top:1px solid var(--border); margin-bottom:20px;">
 
@@ -919,8 +931,9 @@ function init() {
   loadNotes();
   loadContext();
   loadElKey();
-  loadMemory();
   loadTavilyKey();
+  loadSupabaseKeys();
+  loadMemory(); // async — lädt auch von Supabase
   // Stimmen vorladen (Chrome braucht onvoiceschanged)
   if (window.speechSynthesis.onvoiceschanged !== undefined) {
     window.speechSynthesis.onvoiceschanged = () => window.speechSynthesis.getVoices();
@@ -955,14 +968,15 @@ function saveApiKey() {
 }
 
 function saveApiKeyFromSettings() {
-  const val = document.getElementById('settings-api-key').value.trim();
+  const val    = document.getElementById('settings-api-key').value.trim();
   const tavily = document.getElementById('tavily-key-input').value.trim();
-  if (val) {
-    localStorage.setItem(STORAGE_KEYS.apiKey, val);
-    document.getElementById('api-banner').classList.add('hidden');
-  }
+  const sbUrl  = document.getElementById('supabase-url-input').value.trim();
+  const sbKey  = document.getElementById('supabase-key-input').value.trim();
+  if (val)    { localStorage.setItem(STORAGE_KEYS.apiKey, val); document.getElementById('api-banner').classList.add('hidden'); }
   if (tavily) localStorage.setItem('sandy_tavily_key', tavily);
-  showToast('Keys gespeichert ✓');
+  if (sbUrl)  localStorage.setItem('sandy_supabase_url', sbUrl);
+  if (sbKey)  localStorage.setItem('sandy_supabase_key', sbKey);
+  showToast('Alle Keys gespeichert ✓');
 }
 
 function getApiKey() {
@@ -1697,16 +1711,19 @@ Schreibe NUR die Stichpunkte, keine Einleitung. Format: "- ..."`;
     const summary = data.content?.[0]?.text || '';
     if (!summary) { showToast('Zusammenfassung fehlgeschlagen.'); return; }
 
-    // Bestehende Memory erweitern
+    // Bestehende Memory erweitern (localStorage)
     const existing = localStorage.getItem('sandy_memory') || '';
     const date = new Date().toLocaleDateString('de-DE', {day:'numeric', month:'short', hour:'2-digit', minute:'2-digit'});
     const newMemory = (existing ? existing + '\n\n' : '') + `[${date}]:\n${summary}`;
     localStorage.setItem('sandy_memory', newMemory);
 
+    // Auch in Supabase speichern (geräteübergreifend)
+    await saveMemoryToSupabase(summary);
+
     // Anzeigen
     document.getElementById('memory-text').textContent = summary.substring(0, 120) + (summary.length > 120 ? '...' : '');
     document.getElementById('memory-box').style.display = 'block';
-    showToast('🧠 Sandy hat es sich gemerkt ✓');
+    showToast('Sandy hat es sich gemerkt ✓');
   } catch(e) {
     showToast('Fehler beim Zusammenfassen.');
   }
@@ -1719,10 +1736,16 @@ function clearMemory() {
   showToast('Gedächtnis gelöscht');
 }
 
-function loadMemory() {
-  const m = localStorage.getItem('sandy_memory');
-  if (m) {
-    document.getElementById('memory-text').textContent = m.substring(0, 120) + (m.length > 120 ? '...' : '');
+async function loadMemory() {
+  // Erst localStorage
+  const local = localStorage.getItem('sandy_memory') || '';
+  // Dann Supabase (geräteübergreifend)
+  const remote = await loadMemoryFromSupabase();
+  // Remote hat Vorrang wenn vorhanden
+  const combined = remote || local;
+  if (combined) {
+    localStorage.setItem('sandy_memory', combined);
+    document.getElementById('memory-text').textContent = combined.substring(0, 120) + (combined.length > 120 ? '...' : '');
     document.getElementById('memory-box').style.display = 'block';
   }
 }
@@ -1802,6 +1825,90 @@ async function searchWeb() {
     removeTyping();
     renderMsg('sandy', '❌ Verbindungsfehler bei der Recherche. Internetverbindung prüfen.');
   }
+}
+
+// ── SUPABASE GEDÄCHTNIS ──
+function getSupabaseUrl()  { return localStorage.getItem('sandy_supabase_url') || ''; }
+function getSupabaseKey()  { return localStorage.getItem('sandy_supabase_key') || ''; }
+
+function loadSupabaseKeys() {
+  const url = getSupabaseUrl();
+  const key = getSupabaseKey();
+  if (url) { const el = document.getElementById('supabase-url-input'); if(el) el.value = url; }
+  if (key) { const el = document.getElementById('supabase-key-input'); if(el) el.value = key; }
+}
+
+async function setupSupabase() {
+  const url = document.getElementById('supabase-url-input').value.trim() || getSupabaseUrl();
+  const key = document.getElementById('supabase-key-input').value.trim() || getSupabaseKey();
+  if (!url || !key) { alert('Bitte erst Supabase URL und API-Key eingeben und speichern!'); return; }
+
+  showToast('Supabase wird eingerichtet...');
+
+  // Tabelle über SQL Edge Function erstellen
+  try {
+    const res = await fetch(`${url}/rest/v1/sandy_memory`, {
+      method: 'GET',
+      headers: { 'apikey': key, 'Authorization': `Bearer ${key}` }
+    });
+
+    if (res.status === 200 || res.status === 406) {
+      showToast('Supabase Tabelle existiert bereits ✓');
+      return;
+    }
+
+    // Tabelle über RPC erstellen
+    const createRes = await fetch(`${url}/rest/v1/rpc/create_sandy_memory_table`, {
+      method: 'POST',
+      headers: { 'apikey': key, 'Authorization': `Bearer ${key}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({})
+    });
+
+    if (createRes.ok) {
+      showToast('Supabase erfolgreich eingerichtet ✓');
+    } else {
+      // Manuelle Anleitung
+      alert('Bitte erstelle die Tabelle manuell in Supabase:\n\n1. Supabase → SQL Editor\n2. Diesen Code einfügen und ausführen:\n\nCREATE TABLE IF NOT EXISTS sandy_memory (\n  id SERIAL PRIMARY KEY,\n  created_at TIMESTAMPTZ DEFAULT NOW(),\n  session_date TEXT,\n  summary TEXT,\n  topics TEXT[]\n);\n\nALTER TABLE sandy_memory ENABLE ROW LEVEL SECURITY;\nCREATE POLICY "allow_all" ON sandy_memory FOR ALL USING (true);');
+    }
+  } catch(e) {
+    alert('Bitte erstelle die Tabelle manuell in Supabase:\n\n1. Supabase → SQL Editor\n2. Diesen Code einfügen und ausführen:\n\nCREATE TABLE IF NOT EXISTS sandy_memory (\n  id SERIAL PRIMARY KEY,\n  created_at TIMESTAMPTZ DEFAULT NOW(),\n  session_date TEXT,\n  summary TEXT,\n  topics TEXT[]\n);\n\nALTER TABLE sandy_memory ENABLE ROW LEVEL SECURITY;\nCREATE POLICY "allow_all" ON sandy_memory FOR ALL USING (true);');
+  }
+}
+
+async function saveMemoryToSupabase(summary) {
+  const url = getSupabaseUrl();
+  const key = getSupabaseKey();
+  if (!url || !key) return; // Kein Supabase = nur localStorage
+
+  const date = new Date().toLocaleDateString('de-DE', {day:'numeric', month:'long', year:'numeric'});
+  try {
+    await fetch(`${url}/rest/v1/sandy_memory`, {
+      method: 'POST',
+      headers: {
+        'apikey': key,
+        'Authorization': `Bearer ${key}`,
+        'Content-Type': 'application/json',
+        'Prefer': 'return=minimal'
+      },
+      body: JSON.stringify({ session_date: date, summary: summary })
+    });
+  } catch(e) { console.log('Supabase save error:', e); }
+}
+
+async function loadMemoryFromSupabase() {
+  const url = getSupabaseUrl();
+  const key = getSupabaseKey();
+  if (!url || !key) return '';
+
+  try {
+    const res = await fetch(`${url}/rest/v1/sandy_memory?order=created_at.desc&limit=10`, {
+      headers: { 'apikey': key, 'Authorization': `Bearer ${key}` }
+    });
+    if (!res.ok) return '';
+    const data = await res.json();
+    if (!data || data.length === 0) return '';
+    return data.map(m => `[${m.session_date}]: ${m.summary}`).join('\n\n');
+  } catch(e) { return ''; }
 }
 
 // ── TOAST ──
