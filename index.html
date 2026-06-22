@@ -1040,14 +1040,15 @@ async function callSandy(userMsg, imageBase64 = null, imageType = null) {
   saveChatHistory();
   showTyping();
 
-  // Messages für API aufbauen — Bilder nicht in History (zu groß)
-  const apiMessages = [
-    ...chatHistory.slice(-18).map(m => ({ role: m.role, content: m.content })),
-  ];
-  // Letzte User-Nachricht mit Bild ersetzen falls vorhanden
-  if (imageBase64 && imageType) {
-    apiMessages[apiMessages.length - 1] = { role: 'user', content: userContent };
-  }
+  // Messages für API aufbauen — History ohne letzte Nachricht, dann letzte mit Bild anhängen
+  const historyWithoutLast = chatHistory.slice(-20, -1).map(m => ({ role: m.role, content: m.content }));
+  const lastMessage = imageBase64 && imageType
+    ? { role: 'user', content: [
+        { type: 'image', source: { type: 'base64', media_type: imageType, data: imageBase64 } },
+        { type: 'text', text: userMsg || 'Analysiere dieses Bild für mein Business.' }
+      ]}
+    : { role: 'user', content: userMsg };
+  const apiMessages = [...historyWithoutLast, lastMessage];
 
   try {
     const res = await fetch('https://api.anthropic.com/v1/messages', {
@@ -1623,10 +1624,18 @@ function testVoice() {
 
 function speakText(text) {
   if (!voiceEnabled) return;
-  // Chrome Bug Fix: Cancel + kleine Pause
   window.speechSynthesis.cancel();
   setTimeout(() => {
-    const speakable = text.replace(/[#*_`[\]]/g, '').replace(/\n/g,' ').substring(0, 400);
+    // Emojis, Markdown und Sonderzeichen entfernen
+    const speakable = text
+      .replace(/[\u{1F000}-\u{1FFFF}]/gu, '')  // Emojis entfernen
+      .replace(/[\u2600-\u27FF]/gu, '')          // weitere Symbole
+      .replace(/[#*_`[\]>]/g, '')                // Markdown
+      .replace(/\n+/g, ' ')                      // Zeilenumbrüche
+      .replace(/\s+/g, ' ')                      // mehrere Leerzeichen
+      .trim()
+      .substring(0, 400);
+    if (!speakable) return;
     const utt = new SpeechSynthesisUtterance(speakable);
     utt.lang = 'de-DE';
     utt.rate = 1.05;
