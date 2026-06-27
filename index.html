@@ -335,20 +335,35 @@
   <!-- SIDEBAR -->
   <nav class="sidebar">
     <div class="sidebar-section">Hauptmenü</div>
-    <button class="nav-btn active" onclick="showPanel('chat', this)">
-      <span class="icon">💬</span> Chat mit Sandy
+    <div class="sidebar-section">Projekt-Chats</div>
+    <button class="nav-btn active" onclick="switchChat('plausch', '💬 Plausch', this)">
+      <span class="icon">💬</span> Plausch
     </button>
-    <button class="nav-btn" onclick="showPanel('email', this)">
-      <span class="icon">✉️</span> E-Mail schreiben
+    <button class="nav-btn" onclick="switchChat('termine', '📅 Termine & Organisation', this)">
+      <span class="icon">📅</span> Termine & Organisation
     </button>
+    <button class="nav-btn" onclick="switchChat('email-chat', '✉️ E-Mail & Newsletter', this)">
+      <span class="icon">✉️</span> E-Mail & Newsletter
+    </button>
+    <button class="nav-btn" onclick="switchChat('social', '📱 Social Media', this)">
+      <span class="icon">📱</span> Social Media
+    </button>
+    <button class="nav-btn" onclick="switchChat('buecher', '📚 Bücher & Content', this)">
+      <span class="icon">📚</span> Bücher & Content
+    </button>
+    <button class="nav-btn" onclick="switchChat('business', '💰 Business & Finanzen', this)">
+      <span class="icon">💰</span> Business & Finanzen
+    </button>
+    <button class="nav-btn" onclick="switchChat('allgemein', '📝 Allgemein', this)">
+      <span class="icon">📝</span> Allgemein
+    </button>
+
+    <div class="sidebar-section" style="margin-top:8px;">Tools</div>
     <button class="nav-btn" onclick="showPanel('plan', this)">
-      <span class="icon">📅</span> Arbeitsplan
-    </button>
-    <button class="nav-btn" onclick="showPanel('content', this)">
-      <span class="icon">📱</span> Content & Bücher
+      <span class="icon">🗓️</span> Arbeitsplan
     </button>
     <button class="nav-btn" onclick="showPanel('kalender', this)">
-      <span class="icon">📅</span> Kalender
+      <span class="icon">📆</span> Kalender
     </button>
     <button class="nav-btn" onclick="showPanel('mp3', this)">
       <span class="icon">🎙️</span> MP3 erstellen
@@ -362,12 +377,11 @@
 
     <div class="quick-section">
       <div class="quick-label">Schnellstart</div>
-      <button class="quick-chip" onclick="showPanel('kalender', null); document.querySelectorAll('.nav-btn').forEach((b,i)=>i===3?b.classList.add('active'):b.classList.remove('active'))">📅 Termin erstellen</button>
-      <button class="quick-chip" onclick="quickSend('Guten Morgen Sandy! Was ist heute mein wichtigster Task?')">☀️ Guten Morgen</button>
-      <button class="quick-chip" onclick="quickSend('Koche mir bitte einen Kaffee ☕')">☕ Kaffee kochen</button>
-      <button class="quick-chip" onclick="quickSend('Erstelle meinen Tagesplan für heute')">✅ Tagesplan</button>
-      <button class="quick-chip" onclick="quickSend('Welche Aufgaben haben für Zwergenbibliothek gerade Priorität?')">📚 Bücher-Check</button>
-      <button class="quick-chip" onclick="quickSend('Motiviere mich kurz für die Arbeit heute!')">✨ Motivation</button>
+      <button class="quick-chip" onclick="switchChat('plausch','💬 Plausch',null); quickSend('Guten Morgen Sandy! Was ist heute mein wichtigster Task?')">☀️ Guten Morgen</button>
+      <button class="quick-chip" onclick="switchChat('plausch','💬 Plausch',null); quickSend('Koche mir bitte einen Kaffee')">☕ Kaffee kochen</button>
+      <button class="quick-chip" onclick="switchChat('termine','📅 Termine & Organisation',null); quickSend('Erstelle meinen Tagesplan für heute')">✅ Tagesplan</button>
+      <button class="quick-chip" onclick="switchChat('buecher','📚 Bücher & Content',null); quickSend('Welche Aufgaben haben für Zwergenbibliothek gerade Priorität?')">📚 Bücher-Check</button>
+      <button class="quick-chip" onclick="switchChat('plausch','💬 Plausch',null); quickSend('Motiviere mich kurz für die Arbeit heute!')">✨ Motivation</button>
     </div>
   </nav>
 
@@ -376,6 +390,15 @@
 
     <!-- CHAT PANEL -->
     <div class="panel active" id="panel-chat">
+      <!-- Chat Header -->
+      <div style="background:var(--surface); border:1px solid var(--border); border-bottom:none; border-radius:var(--radius) var(--radius) 0 0; padding:12px 16px; display:flex; align-items:center; gap:10px;">
+        <div id="chat-title-icon" style="font-size:18px;">💬</div>
+        <div>
+          <div id="chat-title-name" style="font-size:14px; font-weight:600; color:var(--text);">Plausch</div>
+          <div id="chat-title-count" style="font-size:11px; color:var(--text-hint);">Neuer Chat</div>
+        </div>
+        <button onclick="clearCurrentChat()" style="margin-left:auto; font-size:12px; color:var(--text-hint); border:none; background:none; cursor:pointer; padding:4px 8px; border-radius:4px;" title="Diesen Chat löschen">🗑️ Chat löschen</button>
+      </div>
       <div class="chat-messages" id="chat-messages">
         <!-- Messages inserted here -->
       </div>
@@ -428,7 +451,6 @@
         </div>
         <div class="chat-meta">
           <span class="chat-meta-hint">Enter = Senden · Shift+Enter = neue Zeile · 🖼️ = Bild hochladen</span>
-          <button class="clear-btn" onclick="clearChat()">Chat löschen</button>
         </div>
       </div>
     </div>
@@ -927,24 +949,92 @@ let chatHistory = [];
 let selectedEmailType = '';
 let saveNotesTimer = null;
 
+// ── PROJEKT CHATS ──
+const CHAT_CONFIGS = {
+  'plausch':    { icon: '💬', name: 'Plausch',               context: 'Lockere Gespräche, Brainstorming, alltägliche Fragen.' },
+  'termine':    { icon: '📅', name: 'Termine & Organisation', context: 'Terminplanung, Tagesplanung, Deadlines und Organisation.' },
+  'email-chat': { icon: '✉️', name: 'E-Mail & Newsletter',   context: 'E-Mails schreiben, Newsletter erstellen, Kommunikation.' },
+  'social':     { icon: '📱', name: 'Social Media',           context: 'Social Media Posts, Hooks, Captions und Hashtags für alle Marken.' },
+  'buecher':    { icon: '📚', name: 'Bücher & Content',       context: 'Bücher, Kapitel, Texte und Content-Erstellung.' },
+  'business':   { icon: '💰', name: 'Business & Finanzen',    context: 'Business-Analysen, Affiliate, Krypto, Investments und Finanzen.' },
+  'allgemein':  { icon: '📝', name: 'Allgemein',              context: 'Alles was in keinen anderen Chat passt.' }
+};
+
+let currentChatId = 'plausch';
+
+function switchChat(chatId, chatName, btn) {
+  currentChatId = chatId;
+  const config = CHAT_CONFIGS[chatId];
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  else {
+    document.querySelectorAll('.nav-btn').forEach(b => {
+      if (b.textContent.trim().includes(config.name)) b.classList.add('active');
+    });
+  }
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.getElementById('panel-chat').classList.add('active');
+  document.getElementById('chat-title-icon').textContent = config.icon;
+  document.getElementById('chat-title-name').textContent = config.name;
+  loadChatForProject(chatId);
+}
+
+function loadChatForProject(chatId) {
+  const area = document.getElementById('chat-messages');
+  area.innerHTML = '';
+  try {
+    const saved = localStorage.getItem('sandy_chat_' + chatId);
+    if (saved) {
+      chatHistory = JSON.parse(saved);
+      chatHistory.forEach(m => renderMsg(m.role === 'assistant' ? 'sandy' : 'user', m.content, true));
+      document.getElementById('chat-title-count').textContent = Math.floor(chatHistory.length / 2) + ' Gespräche';
+    } else {
+      chatHistory = [];
+      document.getElementById('chat-title-count').textContent = 'Neuer Chat';
+      const config = CHAT_CONFIGS[chatId];
+      renderMsg('sandy', `Hallo Ramona! Ich bin bereit für "${config.name}". Was kann ich für dich tun?`);
+    }
+  } catch(e) { chatHistory = []; }
+  area.scrollTop = area.scrollHeight;
+}
+
+function saveChatForProject() {
+  try {
+    const toSave = chatHistory.slice(-60);
+    localStorage.setItem('sandy_chat_' + currentChatId, JSON.stringify(toSave));
+    const count = Math.floor(chatHistory.length / 2);
+    const countEl = document.getElementById('chat-title-count');
+    if (countEl) countEl.textContent = count + ' Gespräche';
+  } catch(e) {}
+}
+
+function clearCurrentChat() {
+  if (!confirm('Diesen Chat löschen?')) return;
+  chatHistory = [];
+  localStorage.removeItem('sandy_chat_' + currentChatId);
+  document.getElementById('chat-messages').innerHTML = '';
+  document.getElementById('chat-title-count').textContent = 'Neuer Chat';
+  const config = CHAT_CONFIGS[currentChatId];
+  renderMsg('sandy', `Chat "${config.name}" wurde gelöscht. Wie kann ich dir helfen?`);
+}
+
 // ── INIT ──
 function init() {
   updateClock();
   setInterval(updateClock, 30000);
   loadApiKey();
-  loadChatHistory();
   loadNotes();
   loadContext();
   loadElKey();
   loadTavilyKey();
   loadSupabaseKeys();
-  loadMemory(); // async — lädt auch von Supabase
-  // Stimmen vorladen (Chrome braucht onvoiceschanged)
+  loadMemory();
   if (window.speechSynthesis.onvoiceschanged !== undefined) {
     window.speechSynthesis.onvoiceschanged = () => window.speechSynthesis.getVoices();
   }
   window.speechSynthesis.getVoices();
-  if (chatHistory.length === 0) addWelcomeMessage();
+  // Ersten Projekt-Chat laden
+  switchChat('plausch', '💬 Plausch', document.querySelector('.nav-btn'));
 }
 
 function updateClock() {
@@ -1014,10 +1104,7 @@ function loadChatHistory() {
 }
 
 function saveChatHistory() {
-  try {
-    const toSave = chatHistory.slice(-60);
-    localStorage.setItem(STORAGE_KEYS.chatHistory, JSON.stringify(toSave));
-  } catch(e) {}
+  saveChatForProject();
 }
 
 function renderMsg(role, text, isHistory = false) {
@@ -1060,9 +1147,11 @@ async function callSandy(userMsg, imageBase64 = null, imageType = null) {
 
   const customCtx = localStorage.getItem(STORAGE_KEYS.context) || '';
   const memory    = localStorage.getItem('sandy_memory') || '';
+  const chatCtx   = CHAT_CONFIGS[currentChatId]?.context || '';
   let systemPrompt = SANDY_SYSTEM;
-  if (memory)    systemPrompt += `\n\nWAS SANDY SICH GEMERKT HAT (nie wieder nachfragen!):\n${memory}`;
-  if (customCtx) systemPrompt += `\n\nZUSATZ-KONTEXT VON RAMONA:\n${customCtx}`;
+  systemPrompt += `\n\nAKTUELLER CHAT-BEREICH: ${CHAT_CONFIGS[currentChatId]?.name} — ${chatCtx} Bleibe thematisch in diesem Bereich.`;
+  if (memory)    systemPrompt += `\n\nWAS SANDY SICH GEMERKT HAT:\n${memory}`;
+  if (customCtx) systemPrompt += `\n\nZUSATZ-KONTEXT:\n${customCtx}`;
 
   // Bisherige History als API-Messages (nur Text, max 18 Nachrichten)
   const prevMessages = chatHistory.slice(-18).map(m => ({ role: m.role, content: m.content }));
